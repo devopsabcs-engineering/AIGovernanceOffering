@@ -256,7 +256,11 @@ function Resolve-OidcSubject {
         return $Subject
     }
     $customization = Invoke-GhJson -Arguments @('api', "repos/$($RepositoryInfo.FullName)/actions/oidc/customization/sub") -AllowFailure
-    if (-not $customization -or $customization.use_default) {
+    if ($customization -and $customization.use_default -and $customization.sub_claim_prefix) {
+        # Immutable subjects use owner@id/repo@id instead of the repository name.
+        $value = "$($customization.sub_claim_prefix):environment:$GitHubEnvironment"
+    }
+    elseif (-not $customization -or $customization.use_default) {
         $value = "repo:$($RepositoryInfo.FullName):environment:$GitHubEnvironment"
     }
     else {

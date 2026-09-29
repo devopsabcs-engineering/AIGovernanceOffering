@@ -149,7 +149,7 @@ Stop for explicit user approval before each step. No Azure or GitHub-settings mu
 
 * [x] Step 6.1: Record decisions (model tuple, processing/storage locations, price snapshot, envelope, reviewers, operators)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 503-506)
-* [x] Step 6.2: Run bootstrap, then no-cloud lock rehearsal (G2, G4 part 1) (bootstrap applied; lock rehearsal pending push)
+* [x] Step 6.2: Run bootstrap, then no-cloud lock rehearsal (G2, G4 part 1) (bootstrap applied; lock rehearsal passed: runs 36580363027 and 36580396593 serialized, 36580379495 pending-replaced as expected)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 507-511)
 * [ ] Step 6.3: What-if review and deploy-only session with readiness (G1, G3)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 512-515)

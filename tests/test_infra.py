@@ -229,6 +229,9 @@ class BootstrapScriptTests(unittest.TestCase):
         self.assertNotIn("ref:refs/heads", self.script)
         self.assertIn("$GitHubEnvironment = 'lab'", self.script)
 
+    def test_federated_subject_honors_immutable_prefix(self):
+        self.assertIn("$customization.sub_claim_prefix):environment:$GitHubEnvironment", self.script)
+
 
 if __name__ == "__main__":
     unittest.main()

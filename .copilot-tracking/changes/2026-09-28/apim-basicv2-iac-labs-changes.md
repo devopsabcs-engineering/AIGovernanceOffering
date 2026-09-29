@@ -70,6 +70,8 @@ Local-first implementation of the plan: notebook and shared-module safety fixes,
   * Demo 3 streaming fixture scored below the default violence threshold (NOT TRIPPED, inconclusive). lab-session.yml now forwards optional `AIGOV_CONTENT_SAFETY_THRESHOLD_*` variables and EN/FR lab 4 document them. Session local202609290837-1 retried with violence threshold 2: still not tripped (gpt-4.1-mini keeps the placeholder story mild), so the temporary repository variable was removed. Pending user decision ID-01.
   * Session local202609290837-1 confirmed the Demo 4 fix: routing_paths passed (32/32 named members), all 5 Demo 4 objectives passed.
   * ID-01 option B: shared/results.py adds `OBSERVATIONAL_OBJECTIVES` (`demo3.stream_intervention`) and `blocks_verdict`; scripts/check_notebook_outputs.py and scripts/render_evidence.py use it; tests/test_evidence.py updated (292 tests OK); EN/FR lab 4 explain the observational objective.
+  * Pushed f8c564e to main (user approved). CI run 36580181528 passed all 5 jobs (PSScriptAnalyzer, unit tests, site build and link crawl, bicep build and lint, actionlint).
+  * Lock rehearsal (G4 part 1): lab-session lock-test 36580363027 held 14:08:12-14:12:15Z, teardown lock_test 36580396593 ran 14:12:18-14:16:21Z (no overlap); second lab-session lock-test 36580379495 was pending-replaced (expected GitHub behavior, recorded).
 
 * Phase 1: notebooks gained stable cell IDs (nbformat 4.5 requirement) as a side effect of scripted edits.
   * Required for valid notebook format; no content change.
