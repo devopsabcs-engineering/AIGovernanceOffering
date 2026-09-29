@@ -58,6 +58,17 @@ REQUIRED_OBJECTIVES: Dict[str, Tuple[str, ...]] = {
 EXCLUDABLE_ITEMS: Dict[str, Tuple[str, ...]] = {
     "demo4-resilient-pool": ("demo4.cleanup",),
 }
+# Required objectives whose ``inconclusive`` outcome is reported as not verified
+# but does not fail the verdict: whether the model's own output crosses a safety
+# threshold is not deterministic. ``failed`` and missing results still fail.
+OBSERVATIONAL_OBJECTIVES: Tuple[str, ...] = ("demo3.stream_intervention",)
+
+
+def blocks_verdict(objective_id: str, status: str) -> bool:
+    """True when an objective status fails the session verdict."""
+    if status == "passed":
+        return False
+    return not (objective_id in OBSERVATIONAL_OBJECTIVES and status == "inconclusive")
 
 _SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{0,99}$")
 _EVIDENCE_KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")

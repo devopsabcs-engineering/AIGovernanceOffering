@@ -313,7 +313,8 @@ def extract_residual(data: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
 def notebook_status(entry: Mapping[str, Any]) -> str:
     if entry.get("status") == "not_run":
         return "not_run"
-    statuses = [o["status"] for o in entry["objectives"].values()]
+    statuses = [o["status"] for oid, o in entry["objectives"].items()
+                if results.blocks_verdict(oid, o["status"])]
     if any(s == "missing" for s in statuses):
         return "incomplete"
     if any(s == "failed" for s in statuses):
@@ -543,7 +544,8 @@ def render(evidence: Mapping[str, Any], out_dir: Path) -> List[Path]:
             _table(plt, f"{lab}: teardown", rows, ("item", "value"), path, footer)
         else:
             objectives = evidence["notebooks"][source]["objectives"]
-            rows = [(oid, o["status"]) for oid, o in objectives.items()]
+            rows = [(oid, o["status"] if o["status"] == "passed" else f"{o['status']} (not verified)")
+                    for oid, o in objectives.items()]
             _table(plt, f"{lab}: objectives", rows, ("objective", "status"), path, footer)
         written.append(path)
     return written

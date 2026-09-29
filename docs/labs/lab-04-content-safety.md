@@ -75,6 +75,8 @@ Run the streaming section.
 
 Expected result: the notebook checks the HTTP status, requires `text/event-stream`, and parses the server-sent events. A confirmed intervention needs policy-specific evidence and records `demo3.stream_intervention` as passed; a stream that ends early without that evidence is `inconclusive`; a stream that completes with `[DONE]` is `not_tripped`.
 
+The streaming objective is observational: whether the model's own completion crosses a category threshold is not deterministic, so `inconclusive` is reported as not verified and does not fail the session verdict. A `failed` result, such as a transport or protocol error, still fails it.
+
 When the outbound policy detects a violation in a stream, APIM stops forwarding further events instead of returning `403`.
 
 ### Exercise 4.5: Review the session evidence

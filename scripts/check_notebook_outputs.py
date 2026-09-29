@@ -4,7 +4,8 @@
 Requires exactly the five executed notebooks in ``outputs/executed/<session_id>/``
 with a matching ``execution.json`` (latest run per notebook exit code 0, source
 hash equal to the committed notebook), no error outputs or incomplete cells, and
-every required objective ``passed``. Writes an allowlisted
+every required objective ``passed`` (an observational objective may be
+``inconclusive``). Writes an allowlisted
 ``outputs/results/<session_id>/verdict.json`` before exiting; exits nonzero
 unless every required objective passed. Never prints notebook content.
 """
@@ -122,7 +123,7 @@ def check_session(
         for item_id in (data.get("excluded") or {}):
             if item_id in results.EXCLUDABLE_ITEMS.get(stem, ()):
                 excluded[item_id] = "intentionally_excluded"
-    not_passed = [oid for oid, o in objectives.items() if o["status"] != "passed"]
+    not_passed = [oid for oid, o in objectives.items() if results.blocks_verdict(oid, o["status"])]
     status = "passed" if not problems and not not_passed else "failed"
     return {
         "schema_version": 1,

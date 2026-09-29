@@ -513,3 +513,13 @@ Minor findings (5; no DR/DD entries added):
   * Option B: make `demo3.stream_intervention` observational (inconclusive allowed, reported, no success image) so the verdict can pass.
   * Option C: keep as is; accept a `failed` verdict with a documented single inconclusive objective.
   * Recommendation: B now, A later.
+
+## User Decisions
+
+* ID-01: Demo 3 streaming objective — Option B selected (2026-09-29)
+  * Implemented: `results.OBSERVATIONAL_OBJECTIVES` and `blocks_verdict`; checker and lab status ignore an observational `inconclusive`; rendered row reads "inconclusive (not verified)". `failed` or missing still fail. Option A (RAI-approved fixture) remains follow-on WI-13.
+* Push: approved (2026-09-29).
+* Environment: keep running for post-push workflow runs, then teardown.
+* WI-13: Replace Demo 3 placeholder fixtures with an RAI-approved evaluation set that reliably trips the outbound streaming check (medium)
+  * Source: Phase 6 live run
+  * Dependency: Responsible AI review

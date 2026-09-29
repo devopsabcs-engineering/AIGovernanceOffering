@@ -172,12 +172,27 @@ class CheckerTests(unittest.TestCase):
         _, verdict = self.fx.check()
         self.assertEqual(verdict["notebooks"]["demo1-token-limits"]["execution"], "traceback_output")
 
-    def test_inconclusive_safety_objective_fails(self):
+    def test_inconclusive_observational_objective_does_not_fail(self):
         results.record_objective("demo3-content-safety", "demo3.stream_intervention", "inconclusive", {},
                                  session_id=SESSION, root=self.fx.paths.results_root)
         code, verdict = self.fx.check()
-        self.assertEqual(code, 1)
+        self.assertEqual(code, 0, verdict["problems"])
+        self.assertEqual(verdict["status"], "passed")
         self.assertEqual(verdict["objectives"]["demo3.stream_intervention"]["status"], "inconclusive")
+        self.assertEqual(verdict["counts"]["inconclusive"], 1)
+
+    def test_failed_observational_objective_fails(self):
+        results.record_objective("demo3-content-safety", "demo3.stream_intervention", "failed", {},
+                                 session_id=SESSION, root=self.fx.paths.results_root)
+        code, verdict = self.fx.check()
+        self.assertEqual(code, 1)
+        self.assertEqual(verdict["status"], "failed")
+
+    def test_inconclusive_required_objective_fails(self):
+        results.record_objective("demo3-content-safety", "demo3.prompt_shield_block", "inconclusive", {},
+                                 session_id=SESSION, root=self.fx.paths.results_root)
+        code, verdict = self.fx.check()
+        self.assertEqual(code, 1)
         self.assertEqual(verdict["counts"]["inconclusive"], 1)
 
     def test_missing_objective_fails(self):
@@ -286,7 +301,7 @@ class SanitizerTests(unittest.TestCase):
         self.assert_failed_closed("malformed_input")
 
     def test_non_passed_objectives_map_to_lab_status(self):
-        results.record_objective("demo3-content-safety", "demo3.stream_intervention", "inconclusive", {},
+        results.record_objective("demo3-content-safety", "demo3.prompt_shield_block", "inconclusive", {},
                                  session_id=SESSION, root=self.fx.paths.results_root)
         results.record_objective("demo1-token-limits", "demo1.baseline", "failed", {},
                                  session_id=SESSION, root=self.fx.paths.results_root)
@@ -295,6 +310,13 @@ class SanitizerTests(unittest.TestCase):
         self.assertEqual(labs["lab04-content-safety"]["status"], "inconclusive")
         self.assertEqual(labs["lab02-token-limits"]["status"], "failed")
         self.assertEqual(labs["lab01-setup-validation"]["status"], "passed")
+
+    def test_observational_inconclusive_keeps_lab_passed(self):
+        results.record_objective("demo3-content-safety", "demo3.stream_intervention", "inconclusive", {},
+                                 session_id=SESSION, root=self.fx.paths.results_root)
+        self.assertEqual(self.fx.sanitize()[0], 0)
+        labs = json.loads(self.fx.evidence_file.read_text(encoding="utf-8"))["labs"]
+        self.assertEqual(labs["lab04-content-safety"]["status"], "passed")
 
     def test_renderer_refuses_notebooks_and_tainted_evidence(self):
         out = io.StringIO()
@@ -318,7 +340,7 @@ class SanitizerTests(unittest.TestCase):
     @unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib is not installed")
     def test_render_writes_canonical_names_and_status_cards(self):
         self.fx.write_reports()
-        results.record_objective("demo3-content-safety", "demo3.stream_intervention", "inconclusive", {},
+        results.record_objective("demo3-content-safety", "demo3.prompt_shield_block", "inconclusive", {},
                                  session_id=SESSION, root=self.fx.paths.results_root)
         self.assertEqual(self.fx.sanitize()[0], 0)
         out_dir = self.fx.tmp / "png"

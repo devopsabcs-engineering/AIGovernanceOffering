@@ -76,6 +76,8 @@ Exécutez la section de diffusion en continu.
 
 Résultat attendu : le carnet vérifie l'état HTTP, exige `text/event-stream` et analyse les événements envoyés par le serveur. Une intervention confirmée exige une preuve propre à la stratégie et consigne `demo3.stream_intervention` comme réussi; un flux qui se termine tôt sans cette preuve est `inconclusive`; un flux qui se termine avec `[DONE]` est `not_tripped`.
 
+L'objectif de diffusion en continu est observationnel : le fait que la réponse du modèle dépasse un seuil de catégorie n'est pas déterministe. Un résultat `inconclusive` est donc signalé comme non vérifié et ne fait pas échouer le verdict de la session. Un résultat `failed`, comme une erreur de transport ou de protocole, le fait toujours échouer.
+
 Lorsque la stratégie sortante détecte une violation dans un flux, APIM cesse de transmettre les événements suivants au lieu de renvoyer `403`.
 
 ### Exercice 4.5 : Examiner les preuves de la session

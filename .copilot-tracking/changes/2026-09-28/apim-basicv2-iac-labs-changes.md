@@ -69,6 +69,7 @@ Local-first implementation of the plan: notebook and shared-module safety fixes,
   * Fixed notebooks/demo4-resilient-pool.ipynb: `configure_mode("routing")` now sends unscored warm-up calls until a mock member answers, because APIM backend changes propagate asynchronously and CALL 1 reached the real model (no x-served-by). Warm-ups are budgeted as model calls; config/session-envelope.json gained `demo4.routing_warmup` (12 attempts, 780 tokens; totals 183 attempts, 6893 tokens).
   * Demo 3 streaming fixture scored below the default violence threshold (NOT TRIPPED, inconclusive). lab-session.yml now forwards optional `AIGOV_CONTENT_SAFETY_THRESHOLD_*` variables and EN/FR lab 4 document them. Session local202609290837-1 retried with violence threshold 2: still not tripped (gpt-4.1-mini keeps the placeholder story mild), so the temporary repository variable was removed. Pending user decision ID-01.
   * Session local202609290837-1 confirmed the Demo 4 fix: routing_paths passed (32/32 named members), all 5 Demo 4 objectives passed.
+  * ID-01 option B: shared/results.py adds `OBSERVATIONAL_OBJECTIVES` (`demo3.stream_intervention`) and `blocks_verdict`; scripts/check_notebook_outputs.py and scripts/render_evidence.py use it; tests/test_evidence.py updated (292 tests OK); EN/FR lab 4 explain the observational objective.
 
 * Phase 1: notebooks gained stable cell IDs (nbformat 4.5 requirement) as a side effect of scripted edits.
   * Required for valid notebook format; no content change.
