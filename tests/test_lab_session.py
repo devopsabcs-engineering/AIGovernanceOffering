@@ -405,6 +405,24 @@ class RunNotebookTests(_Base):
         data = json.loads((self.ctx.paths.executed_dir(session_id) / "execution.json").read_text())
         self.assertEqual(data["runs"][0]["exit_code"], 3)
 
+    def test_failed_notebook_reports_cell_and_exception_class_only(self):
+        session_id = start_session(self.ctx)
+        run(self.ctx, "run-notebooks", "--init")
+
+        def failing(nb, out, cwd, log, timeout):
+            out.write_text(json.dumps({"cells": [
+                {"cell_type": "markdown", "id": "md1", "source": "x"},
+                {"cell_type": "code", "id": "abc123", "outputs": [
+                    {"output_type": "error", "ename": "RuntimeError", "evalue": "key-SECRETVALUE",
+                     "traceback": ["key-SECRETVALUE"]}]}]}), encoding="utf-8")
+            return 1
+
+        self.ctx.papermill = failing
+        self.assertEqual(run(self.ctx, "run-notebooks", "--only", "demo4-resilient-pool"), 1)
+        self.assertIn("failure cell=2 id=abc123 error=RuntimeError", self.output())
+        self.assertNotIn("SECRETVALUE", self.output())
+        self.assertTrue(session_id)
+
 
 class CleanupTests(_Base):
     def auto(self, mode, deploy="success", readiness="success", keep="false"):

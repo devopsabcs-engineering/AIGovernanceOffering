@@ -1385,7 +1385,29 @@ def cmd_run_notebooks(ctx: Context, args: argparse.Namespace) -> int:
         })
         atomic_write_json(execution_file, data)
     ctx.say(f"run-notebooks: {stem} exit_code={exit_code}")
+    if exit_code != 0:
+        ctx.say(f"run-notebooks: {stem} failure {_notebook_failure_locator(executed / f'{stem}.ipynb')}")
     return 0 if exit_code == 0 else 1
+
+
+_EXCEPTION_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]{0,80}$")
+_CELL_ID = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
+
+
+def _notebook_failure_locator(path: Path) -> str:
+    """Locate the failing cell by index, id, and exception class only; never messages or output."""
+    try:
+        cells = json.loads(path.read_text(encoding="utf-8")).get("cells", [])
+    except (OSError, ValueError):
+        return "unreadable"
+    for index, cell in enumerate(cells, start=1):
+        for output in cell.get("outputs", []) if cell.get("cell_type") == "code" else []:
+            if output.get("output_type") == "error":
+                ename = str(output.get("ename", ""))
+                cell_id = str(cell.get("id", ""))
+                return (f"cell={index} id={cell_id if _CELL_ID.match(cell_id) else 'unknown'} "
+                        f"error={ename if _EXCEPTION_NAME.match(ename) else 'unknown'}")
+    return "not_located"
 
 
 # ---------------------------------------------------------------------------
