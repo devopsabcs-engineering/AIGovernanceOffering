@@ -59,6 +59,8 @@ Expected result: the fixture set carries a version stamp.
 
 The shipped prompt-attack, harm-threshold, and streaming fixtures are mild, non-graphic placeholders that exercise the mechanism only. Replace them with your organization's pre-approved evaluation set before delivering the lab to an audience. Never improvise harmful examples live.
 
+To use an approved set without editing code, set `DEMO3_FIXTURES_FILE` to a JSON file with a `version` string and a `fixtures` object that defines `safe_business_prompt`, `prompt_injection`, `harm_threshold`, and `streaming_completion`, each with `case`, `input_label`, `prompt`, `expected_status`, and `expected_evidence`. The notebook refuses an incomplete file instead of mixing it with the placeholders. Keep the approved file out of source control unless your Responsible AI team approves publishing it.
+
 ### Exercise 4.3 (Hands-on): Run the test matrix
 
 Open `notebooks/demo3-content-safety.ipynb` and run through the test matrix.

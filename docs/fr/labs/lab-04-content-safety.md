@@ -60,6 +60,8 @@ Résultat attendu : l'ensemble de données de test porte un numéro de version.
 
 Les données livrées pour l'attaque d'invite, le seuil de préjudice et la diffusion en continu sont des substituts modérés et non explicites qui exercent uniquement le mécanisme. Remplacez-les par l'ensemble d'évaluation préapprouvé de votre organisation avant de présenter l'atelier à un public. N'improvisez jamais d'exemples préjudiciables en direct.
 
+Pour utiliser un ensemble approuvé sans modifier le code, définissez `DEMO3_FIXTURES_FILE` sur un fichier JSON contenant une chaîne `version` et un objet `fixtures` qui définit `safe_business_prompt`, `prompt_injection`, `harm_threshold` et `streaming_completion`, chacun avec `case`, `input_label`, `prompt`, `expected_status` et `expected_evidence`. Le carnet refuse un fichier incomplet au lieu de le combiner avec les substituts. Ne versionnez pas le fichier approuvé, sauf si votre équipe d'IA responsable approuve sa publication.
+
 ### Exercice 4.3 (pratique) : Exécuter la matrice de tests
 
 Ouvrez `notebooks/demo3-content-safety.ipynb` et exécutez la matrice de tests.

@@ -1,6 +1,9 @@
 <policies>
   <inbound>
     <base />
+    <!-- Client subscription credentials stay at the gateway; pool members get their own credentials. -->
+    <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+    <set-query-parameter name="subscription-key" exists-action="delete" />
     <!-- The pool selector, not this policy, chooses a healthy member on every call. -->
     <set-backend-service backend-id="demo4-aoai-pool" />
     <authentication-managed-identity resource="https://cognitiveservices.azure.com" />

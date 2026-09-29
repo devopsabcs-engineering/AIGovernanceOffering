@@ -14,11 +14,18 @@ reviewed by your Responsible AI team.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+import json
+import os
+from pathlib import Path
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 # Bump this whenever a fixture's wording changes so notebook output and any
 # saved evidence can be traced back to the exact fixture text that produced it.
 FIXTURE_SET_VERSION = "2025-01-demo3-v1"
+
+FIXTURES_FILE_ENV = "DEMO3_FIXTURES_FILE"
+FIXTURE_KEYS = ("safe_business_prompt", "prompt_injection", "harm_threshold", "streaming_completion")
+FIXTURE_FIELDS = ("case", "input_label", "prompt", "expected_status", "expected_evidence")
 
 # Test matrix shape: Case / Input (fixture) / Expected / Evidence.
 DEMO3_FIXTURES: Dict[str, Dict[str, Any]] = {
@@ -74,3 +81,46 @@ DEMO3_FIXTURES: Dict[str, Dict[str, Any]] = {
         "expected_evidence": "No later events forwarded",
     },
 }
+
+
+class FixtureError(ValueError):
+    """Raised when an approved fixture file is missing, malformed, or incomplete."""
+
+
+def load_approved_fixtures(path: Path) -> Tuple[str, Dict[str, Dict[str, Any]]]:
+    """Load an RAI-approved fixture set: {"version": str, "fixtures": {key: {field: value}}}.
+
+    Every placeholder key must be present with every field, so an approved set
+    fully replaces the placeholders rather than silently mixing with them.
+    """
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise FixtureError(f"Approved fixture file could not be read: {type(exc).__name__}.") from None
+    if not isinstance(data, Mapping):
+        raise FixtureError("Approved fixture file must be a JSON object.")
+    version = data.get("version")
+    fixtures = data.get("fixtures")
+    if not isinstance(version, str) or not version.strip():
+        raise FixtureError("Approved fixture file needs a non-empty 'version'.")
+    if not isinstance(fixtures, Mapping) or set(fixtures) != set(FIXTURE_KEYS):
+        raise FixtureError(f"Approved fixture file must define exactly: {', '.join(FIXTURE_KEYS)}.")
+    loaded: Dict[str, Dict[str, Any]] = {}
+    for key in FIXTURE_KEYS:
+        entry = fixtures[key]
+        if not isinstance(entry, Mapping) or any(field not in entry for field in FIXTURE_FIELDS):
+            raise FixtureError(f"Fixture '{key}' must define: {', '.join(FIXTURE_FIELDS)}.")
+        if not isinstance(entry["prompt"], str) or not entry["prompt"].strip():
+            raise FixtureError(f"Fixture '{key}' needs a non-empty prompt.")
+        loaded[key] = {field: entry[field] for field in FIXTURE_FIELDS}
+    return version.strip(), loaded
+
+
+def _apply_override(env: Optional[Mapping[str, str]] = None) -> None:
+    global FIXTURE_SET_VERSION, DEMO3_FIXTURES
+    path = (env if env is not None else os.environ).get(FIXTURES_FILE_ENV, "").strip()
+    if path:
+        FIXTURE_SET_VERSION, DEMO3_FIXTURES = load_approved_fixtures(Path(path))
+
+
+_apply_override()

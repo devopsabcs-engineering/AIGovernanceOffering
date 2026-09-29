@@ -466,6 +466,17 @@ class StaticTextTests(unittest.TestCase):
             with self.subTest(workflow=name):
                 self.assertEqual(text.count("actions/checkout@"), text.count("persist-credentials: false"))
 
+    def test_bicep_cli_is_pinned_identically(self):
+        versions = {}
+        for name in ("ci.yml", "lab-session.yml"):
+            text = _text(name)
+            with self.subTest(workflow=name):
+                self.assertIn("bicep.use_binary_from_path=false", text)
+                found = re.findall(r"az bicep install --version (v\d+\.\d+\.\d+)", text)
+                self.assertEqual(len(found), 1)
+                versions[name] = found[0]
+        self.assertEqual(len(set(versions.values())), 1, versions)
+
 
 if __name__ == "__main__":
     unittest.main()

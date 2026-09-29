@@ -110,7 +110,11 @@ jobs:
 
       - name: Install dependencies
         timeout-minutes: 8
-        run: python -m pip install --disable-pip-version-check --no-input -r requirements-ci.txt
+        run: |
+          python -m pip install --disable-pip-version-check --no-input -r requirements-ci.txt
+          # Runner images ship their own bicep on PATH; pin the version the lab was validated with.
+          az config set bicep.use_binary_from_path=false --only-show-errors
+          az bicep install --version v0.47.16
 
       - name: init-session
         id: init_session

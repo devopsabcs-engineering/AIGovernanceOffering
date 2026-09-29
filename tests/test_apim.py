@@ -168,8 +168,9 @@ class ApimPolicyTests(unittest.TestCase):
             "404",
         )
 
-    def test_demo1_to_3_strip_client_subscription_credentials(self):
-        for name in ("demo1-token-limit.xml", "demo2-emit-token-metric.xml", "demo3-content-safety.xml"):
+    def test_client_policies_strip_client_subscription_credentials(self):
+        for name in ("demo1-token-limit.xml", "demo2-emit-token-metric.xml", "demo3-content-safety.xml",
+                     "demo4-resilient-pool.xml"):
             with self.subTest(policy=name):
                 inbound = ET.parse(POLICIES / name).getroot().find("inbound")
                 children = list(inbound)

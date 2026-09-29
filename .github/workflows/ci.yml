@@ -66,7 +66,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Bicep CLI
-        run: az bicep install
+        run: |
+          az config set bicep.use_binary_from_path=false --only-show-errors
+          az bicep install --version v0.47.16
       - name: Build template
         run: az bicep build --file infra/main.bicep --outdir "$RUNNER_TEMP"
       - name: Lint template (fail on warnings)
