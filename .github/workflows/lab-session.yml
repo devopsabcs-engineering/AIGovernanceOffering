@@ -59,7 +59,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    # Sum of every step cap (341) plus margin; the hosted-runner limit is 360.
+    # Sum of every step cap (346) plus margin; the hosted-runner limit is 360.
     timeout-minutes: 355
     outputs:
       evidence_ready: ${{ steps.sanitize.outputs.evidence_ready == 'true' && steps.upload_evidence.outcome == 'success' }}
@@ -326,11 +326,11 @@ jobs:
       - name: notebook demo4-resilient-pool
         id: nb_demo4
         if: ${{ !cancelled() && steps.nb_init.outcome == 'success' && steps.login_nb_demo4.outcome == 'success' }}
-        timeout-minutes: 12
+        timeout-minutes: 17
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
           ACTIONS_ID_TOKEN_REQUEST_URL: ""
-        run: python scripts/lab_session.py run-notebooks --only demo4-resilient-pool --timeout-seconds 660
+        run: python scripts/lab_session.py run-notebooks --only demo4-resilient-pool --timeout-seconds 960
 
       - name: login-runtime-traffic
         id: login_traffic

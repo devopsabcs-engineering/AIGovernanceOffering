@@ -99,6 +99,7 @@ class NotebookContentTests(unittest.TestCase):
             if isinstance(node, ast.FunctionDef) and node.name in helper_names
         ]
         fake_apim = SimpleNamespace(ensure_named_value=Mock())
+        wait_for_mock_state = Mock(return_value=True)
         namespace = {
             "CIRCUIT_TRIP_SECONDS": 60,
             "MEMBER_BACKEND_IDS": {
@@ -108,6 +109,7 @@ class NotebookContentTests(unittest.TestCase):
             },
             "cfg": SimpleNamespace(subscription_id="sub", resource_group="rg", apim_name="apim"),
             "apim": fake_apim,
+            "wait_for_mock_state": wait_for_mock_state,
         }
         exec(compile(ast.Module(body=helpers, type_ignores=[]), "<demo4>", "exec"), namespace)
 
@@ -126,6 +128,9 @@ class NotebookContentTests(unittest.TestCase):
         self.assertEqual(values_by_id["demo4-mock-retry-after-east"], "60")
         self.assertIn("demo4-mock-fault-central", values_by_id)
         self.assertIn("demo4-mock-fault-payg", values_by_id)
+        self.assertEqual(wait_for_mock_state.call_args_list[0].args, ("east", "429"))
+        self.assertEqual(wait_for_mock_state.call_args_list[1].args, ("east", "healthy"))
+        self.assertEqual(wait_for_mock_state.call_count, 5)
 
 
 def _notebook_code(notebook_path):
