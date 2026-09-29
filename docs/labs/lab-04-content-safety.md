@@ -67,6 +67,8 @@ Expected result: the safe business prompt returns `200` and records `demo3.safe_
 
 A **NOT TRIPPED** row means the fixture scored below the threshold. The approved responses are to substitute a pre-approved evaluation fixture or to lower the relevant `CONTENT_SAFETY_THRESHOLD_*` value for the demonstration only.
 
+The automated lab session reads optional `AIGOV_CONTENT_SAFETY_THRESHOLD_*` repository variables, defaults each to `4`, and applies them as the Demo 3 threshold named values. Lowering a threshold is for demonstration only; production thresholds remain a Responsible AI business decision. A lower threshold does not guarantee a streaming intervention, because the model may keep its completion below every category threshold.
+
 ### Exercise 4.4 (Hands-on): Observe the streaming case
 
 Run the streaming section.

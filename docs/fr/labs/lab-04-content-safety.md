@@ -68,6 +68,8 @@ Résultat attendu : l'invite d'affaires sûre renvoie `200` et consigne `demo3.s
 
 Une ligne **NOT TRIPPED** signifie que la donnée de test a obtenu un score inférieur au seuil. Les réponses approuvées consistent à utiliser une donnée d'évaluation préapprouvée ou à abaisser la valeur `CONTENT_SAFETY_THRESHOLD_*` concernée pour la démonstration seulement.
 
+La session d'atelier automatisée lit les variables de dépôt facultatives `AIGOV_CONTENT_SAFETY_THRESHOLD_*`, fixe chacune à `4` par défaut et les applique comme valeurs nommées des seuils de la démo 3. L'abaissement d'un seuil sert uniquement à la démonstration; les seuils de production demeurent une décision d'affaires en matière d'IA responsable. Un seuil plus bas ne garantit pas une intervention en continu, car le modèle peut maintenir sa réponse sous tous les seuils de catégorie.
+
 ### Exercice 4.4 (pratique) : Observer le cas de diffusion en continu
 
 Exécutez la section de diffusion en continu.

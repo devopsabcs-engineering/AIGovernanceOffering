@@ -499,3 +499,17 @@ Minor findings (5; no DR/DD entries added):
 * 2026-09-29: Phases 1-5 and local Phase 8 (Steps 8.1-8.2) completed; Phases 6-7 not started pending explicit user approval. All gates G1-G9 remain OPEN.
 * Phase 6 prerequisite decisions: approved model tuple and residency (AIGOV_CHAT_*, AIGOV_AI_LOCATION, AIGOV_CONTENT_SAFETY_LOCATION, AIGOV_ALLOW_GLOBAL_PROCESSING), price snapshot file and AIGOV_PRICE_SNAPSHOT, session caps (defaults 207 attempts, ~16.3k tokens, USD 2.00), environment reviewers, recovery/purge operator, publisher email.
 * Live verifications carried from implementation: custom role action names, CustomMetricsOptedInType readback API version, logger identityClientId readback, dropping largeLanguageModel on diagnostics, mock-auth 401, stream-intervention provenance, token metric namespace dimension, App Insights auto-created smart detection resources.
+* 2026-09-29 live Phase 6: user approved all recommendations, deploy, commit, OIDC apps, environments, and variables. Push not yet explicitly approved.
+  * Verified live: custom role actions (bootstrap applied), logger identityClientId is stored as a secret named-value reference (resolver added), mock-auth 401, metric ingestion via the APIM identity, token metric names `Prompt Tokens`/`Completion Tokens`/`Total Tokens`.
+  * DD-16: Demo 4 routing warm-up. Plan scored CALL 1 immediately after the mode switch; APIM backend propagation is asynchronous, so unscored warm-up calls (budgeted as model calls) now precede scoring.
+  * DD-17: Demo 2 metric retry waits for series completeness, not first non-empty result.
+  * Stream-intervention provenance remains unverified: gpt-4.1-mini did not produce content above violence threshold 4 or 2 for the placeholder fixture in sessions local202609290808-1 and local202609290837-1.
+
+## Pending User Decisions
+
+* ID-01: Demo 3 streaming objective blocks every checker verdict
+  * Context: `demo3.stream_intervention` is required and is `inconclusive` whenever the model keeps the completion safe. Per DD-10, evidence publishes passed objectives and marks inconclusive ones unverified, but the session verdict stays `failed`.
+  * Option A: keep the objective required; supply an organization-approved evaluation fixture that reliably trips the outbound check (RAI-reviewed).
+  * Option B: make `demo3.stream_intervention` observational (inconclusive allowed, reported, no success image) so the verdict can pass.
+  * Option C: keep as is; accept a `failed` verdict with a documented single inconclusive objective.
+  * Recommendation: B now, A later.

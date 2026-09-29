@@ -29,15 +29,16 @@
     "demo4-resilient-pool": {
       "call_sites": [
         {"label": "demo4.inference_call", "kind": "model", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 25, "max_output_tokens": 40, "stream": false, "client_retries": 0, "reserved_tokens": 65},
+        {"label": "demo4.routing_warmup", "kind": "model", "enabled": true, "max_attempts": 12, "estimated_input_tokens": 25, "max_output_tokens": 40, "stream": false, "client_retries": 0, "reserved_tokens": 780, "note": "Up to 6 unscored warm-up calls per switch to routing mode (2 switches); budgeted as model calls because a stale route can still reach real inference."},
         {"label": "demo4.routing_call", "kind": "mock", "enabled": true, "max_attempts": 74, "estimated_input_tokens": 0, "max_output_tokens": 0, "stream": false, "client_retries": 0, "reserved_tokens": 0, "note": "CALL 1, CALL 2, 30 weighted, 12 East-fault, 6 Central, 12 both-fault, and 12 recovery calls to the APIM-hosted mock origin."},
         {"label": "demo4.mock_auth_probe", "kind": "mock", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 0, "max_output_tokens": 0, "stream": false, "client_retries": 0, "reserved_tokens": 0}
       ]
     }
   },
   "totals": {
-    "max_attempts": 171,
-    "model_and_safety_attempts": 96,
+    "max_attempts": 183,
+    "model_and_safety_attempts": 108,
     "mock_attempts": 75,
-    "max_reserved_tokens": 6113
+    "max_reserved_tokens": 6893
   }
 }

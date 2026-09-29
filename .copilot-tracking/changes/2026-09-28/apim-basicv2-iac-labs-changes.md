@@ -63,6 +63,12 @@ Local-first implementation of the plan: notebook and shared-module safety fixes,
   * Fixed scripts/lab_session.py quota check to match Azure's hyphenless usage names (OpenAI.Standard.gpt4.1-mini) with a new test.
   * Fixed scripts/aigov_common.py AzCliArmClient on Windows to call the Azure CLI's bundled Python instead of az.cmd, because cmd.exe mangled '&' and '%' in paginated nextLink URLs (tombstone listing failed).
   * Session local202609290249-1: preflight passed, what-if Create=26 with no deletes, manifest recorded, deploy aigov-main-g01 succeeded, write-env wrote 45 keys.
+  * Fixed shared/apim.py logger readback: APIM stores the logger identityClientId as a `{{Logger-Credentials--...}}` secret named value, so the readback now resolves the reference (listValue when permitted, otherwise not_returned) with 3 new tests.
+  * Fixed notebooks/demo2-token-metrics.ipynb: the metric retry loop now waits until every token series covers the response usage instead of stopping at the first non-empty result (prompt/completion series ingest later than total).
+  * Session local202609290808-1 (full run-existing): readiness 7/7, notebooks all exit 0, traffic 30/30, showback reconciled (USD 0.001444 estimated), render 9 PNGs. Verdict failed on two objectives, fixed below.
+  * Fixed notebooks/demo4-resilient-pool.ipynb: `configure_mode("routing")` now sends unscored warm-up calls until a mock member answers, because APIM backend changes propagate asynchronously and CALL 1 reached the real model (no x-served-by). Warm-ups are budgeted as model calls; config/session-envelope.json gained `demo4.routing_warmup` (12 attempts, 780 tokens; totals 183 attempts, 6893 tokens).
+  * Demo 3 streaming fixture scored below the default violence threshold (NOT TRIPPED, inconclusive). lab-session.yml now forwards optional `AIGOV_CONTENT_SAFETY_THRESHOLD_*` variables and EN/FR lab 4 document them. Session local202609290837-1 retried with violence threshold 2: still not tripped (gpt-4.1-mini keeps the placeholder story mild), so the temporary repository variable was removed. Pending user decision ID-01.
+  * Session local202609290837-1 confirmed the Demo 4 fix: routing_paths passed (32/32 named members), all 5 Demo 4 objectives passed.
 
 * Phase 1: notebooks gained stable cell IDs (nbformat 4.5 requirement) as a side effect of scripted edits.
   * Required for valid notebook format; no content change.
