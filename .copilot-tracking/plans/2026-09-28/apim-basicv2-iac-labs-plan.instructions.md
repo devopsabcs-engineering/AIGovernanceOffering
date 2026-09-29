@@ -147,9 +147,9 @@ Requires Phases 2, 3, and 4.
 
 Stop for explicit user approval before each step. No Azure or GitHub-settings mutation happens in Phases 1-5.
 
-* [ ] Step 6.1: Record decisions (model tuple, processing/storage locations, price snapshot, envelope, reviewers, operators)
+* [x] Step 6.1: Record decisions (model tuple, processing/storage locations, price snapshot, envelope, reviewers, operators)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 503-506)
-* [ ] Step 6.2: Run bootstrap, then no-cloud lock rehearsal (G2, G4 part 1)
+* [x] Step 6.2: Run bootstrap, then no-cloud lock rehearsal (G2, G4 part 1) (bootstrap applied; lock rehearsal pending push)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 507-511)
 * [ ] Step 6.3: What-if review and deploy-only session with readiness (G1, G3)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 512-515)

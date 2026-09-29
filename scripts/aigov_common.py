@@ -695,13 +695,19 @@ class AzCliArmClient(ArmClient):
         super().__init__(sleep=sleep)
         self.timeout_seconds = timeout_seconds
         self._az = shutil.which("az")
+        self._az_prefix: List[str] = [self._az] if self._az else []
+        if self._az and os.name == "nt":
+            # az.cmd routes arguments through cmd.exe, which mangles '&' and '%' in nextLink URLs.
+            bundled = Path(self._az).resolve().parent.parent / "python.exe"
+            if bundled.is_file():
+                self._az_prefix = [str(bundled), "-IBm", "azure.cli"]
 
     def _run(self, args: Sequence[str], timeout: Optional[float] = None) -> Any:
         if not self._az:
             raise AutomationError("Azure CLI 'az' was not found on PATH.")
         try:
             proc = subprocess.run(
-                [self._az, *args, "--only-show-errors", "--output", "json"],
+                [*self._az_prefix, *args, "--only-show-errors", "--output", "json"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",

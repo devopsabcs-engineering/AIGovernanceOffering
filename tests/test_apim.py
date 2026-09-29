@@ -1,3 +1,4 @@
+import json
 import os
 import unittest
 import xml.etree.ElementTree as ET
@@ -555,6 +556,41 @@ class GetAppInsightsLoggerTests(unittest.TestCase):
         with patch.object(apim, "list_loggers", side_effect=AssertionError("no discovery")), \
                 patch.object(apim, "get_logger", return_value=None):
             apim.get_app_insights_logger("sub", "rg", "apim", "demo2-application-insights")
+
+    def _response(self, status, body):
+        response = unittest.mock.Mock(status_code=status)
+        response.text = json.dumps(body)
+        response.content = response.text.encode("utf-8")
+        return response
+
+    def _named_values(self, secret, value=None):
+        props = {"displayName": "Logger-Credentials--2", "secret": secret}
+        if value is not None:
+            props["value"] = value
+        return {"value": [{"name": "nv2", "properties": props}]}
+
+    def test_secret_reference_resolved_with_list_value(self):
+        responses = [self._response(200, self._named_values(True)), self._response(200, {"value": "client-1"})]
+        with patch.object(apim, "get_logger", return_value=self._logger(self.APPI, "{{Logger-Credentials--2}}")), \
+                patch.object(apim, "_request", side_effect=responses) as request:
+            info = apim.get_app_insights_logger("sub", "rg", "apim", "demo2-application-insights", self.APPI)
+        self.assertEqual(info["identity_client_id"], "client-1")
+        self.assertTrue(request.call_args_list[1].args[1].endswith("/namedValues/nv2/listValue"))
+
+    def test_unlistable_secret_reference_is_not_returned(self):
+        responses = [self._response(200, self._named_values(True)), self._response(403, {})]
+        with patch.object(apim, "get_logger", return_value=self._logger(self.APPI, "{{Logger-Credentials--2}}")), \
+                patch.object(apim, "_request", side_effect=responses):
+            info = apim.get_app_insights_logger("sub", "rg", "apim", "demo2-application-insights", self.APPI)
+        self.assertIsNone(info["identity_client_id"])
+
+    def test_plain_reference_resolved_without_list_value(self):
+        responses = [self._response(200, self._named_values(False, "client-2"))]
+        with patch.object(apim, "get_logger", return_value=self._logger(self.APPI, "{{Logger-Credentials--2}}")), \
+                patch.object(apim, "_request", side_effect=responses) as request:
+            info = apim.get_app_insights_logger("sub", "rg", "apim", "demo2-application-insights", self.APPI)
+        self.assertEqual(info["identity_client_id"], "client-2")
+        self.assertEqual(request.call_count, 1)
 
 
 class EnsureApiDiagnosticTests(unittest.TestCase):

@@ -56,6 +56,14 @@ Local-first implementation of the plan: notebook and shared-module safety fixes,
 
 ## Additional or Deviating Changes
 
+* Phase 6 (user-approved 2026-09-29, executed locally under the admin CLI session because workflows are not yet pushed):
+  * Bootstrap applied in subscription 64c3d212-40ed-4c6d-a825-6adfbdf25dad: rg-aigov-lab, rg-aigov-lab-identity, id-aigov-apim-lab, two custom roles, apps aigov-lab-deploy (8834887f-...) and aigov-lab-runtime (3291c2b0-...) with OIDC federation to environment `lab` only, 11 role assignments, GitHub environment `lab` (reviewer emmanuelknafo, main only), 22 repository variables. No client secrets and no GitHub secrets were created (OIDC needs none).
+  * Model tuple: gpt-4.1-mini 2025-04-14 Standard in canadaeast, capacity 30, allowGlobalProcessing=false. Chosen because it is the only chat model with a Canada-regional Standard SKU and existing subscription quota (OpenAI.Standard.gpt4.1-mini); lifecycle Legacy, retirement 2027-04-14.
+  * Added scripts/prices/retail-2026-09-29-gpt-4.1-mini-canadaeast.json from the Azure Retail Prices API (input 0.000484, output 0.001936 USD per 1K tokens, regional meters).
+  * Fixed scripts/lab_session.py quota check to match Azure's hyphenless usage names (OpenAI.Standard.gpt4.1-mini) with a new test.
+  * Fixed scripts/aigov_common.py AzCliArmClient on Windows to call the Azure CLI's bundled Python instead of az.cmd, because cmd.exe mangled '&' and '%' in paginated nextLink URLs (tombstone listing failed).
+  * Session local202609290249-1: preflight passed, what-if Create=26 with no deletes, manifest recorded, deploy aigov-main-g01 succeeded, write-env wrote 45 keys.
+
 * Phase 1: notebooks gained stable cell IDs (nbformat 4.5 requirement) as a side effect of scripted edits.
   * Required for valid notebook format; no content change.
 * Phase 1: Demo 3 streaming objective is `inconclusive` when a stream completes without intervention; prompt-shield not blocked is `failed`.

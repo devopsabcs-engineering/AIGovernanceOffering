@@ -1,0 +1,11 @@
+{
+  "snapshot_id": "retail-2026-09-29-gpt-4.1-mini-canadaeast",
+  "source": "Azure Retail Prices API (https://prices.azure.com/api/retail/prices), serviceName 'Foundry Models', armRegionName canadaeast, type Consumption",
+  "retrieved_at": "2026-09-29T00:00:00Z",
+  "currency": "USD",
+  "notes": "Public retail list price for regional (Standard) deployments. Excludes negotiated discounts, cached-input discounts, taxes, and all non-token charges. Refresh before relying on totals.",
+  "records": [
+    {"model": "gpt-4.1-mini", "version": "2025-04-14", "sku": "Standard", "region": "canadaeast", "currency": "USD", "effective_from": "2025-11-01T00:00:00Z", "effective_to": null, "meter": "input", "meter_id": "c75f470f-5dd6-5008-bed8-cf16a2c078b6", "unit": "per_thousand_tokens", "unit_price": 0.000484},
+    {"model": "gpt-4.1-mini", "version": "2025-04-14", "sku": "Standard", "region": "canadaeast", "currency": "USD", "effective_from": "2025-11-01T00:00:00Z", "effective_to": null, "meter": "output", "meter_id": "3b0fb590-eb3a-5358-ae91-f5720c258ec7", "unit": "per_thousand_tokens", "unit_price": 0.001936}
+  ]
+}

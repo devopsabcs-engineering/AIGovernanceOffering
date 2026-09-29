@@ -714,9 +714,10 @@ def cmd_preflight(ctx: Context, args: argparse.Namespace) -> int:
     def quota() -> Tuple[bool, str]:
         items = ctx.client.get_all(f"/subscriptions/{sub}/providers/Microsoft.CognitiveServices/locations/"
                                    f"{ai_location}/usages?api-version={common.API_VERSIONS['cognitive']}")
-        usage_name = f"OpenAI.{model['sku']}.{model['model']}".lower()
+        usage_names = {f"OpenAI.{model['sku']}.{name}".lower()
+                       for name in (model["model"], re.sub(r"^gpt-", "gpt", model["model"]))}
         for item in items:
-            if str((item.get("name") or {}).get("value", "")).lower() == usage_name:
+            if str((item.get("name") or {}).get("value", "")).lower() in usage_names:
                 headroom = float(item.get("limit", 0)) - float(item.get("currentValue", 0))
                 return (headroom >= model["capacity"]), ("ok" if headroom >= model["capacity"] else "insufficient_quota")
         return False, "quota_unknown"

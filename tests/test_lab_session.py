@@ -261,6 +261,16 @@ class PreflightTests(_Base):
         self.assertEqual(run(self.ctx, "preflight"), 1)
         self.assertEqual(self.summary()["checks"]["model_quota"]["code"], "insufficient_quota")
 
+    def test_quota_matches_hyphenless_gpt_usage_name(self):
+        base = f"/subscriptions/{SUB}/providers/microsoft.cognitiveservices"
+        self.ctx.env["AIGOV_CHAT_MODEL_NAME"] = "gpt-4.1-mini"
+        self.arm.canned[f"{base}/locations/canadaeast/models"] = {"value": [
+            {"model": {"name": "gpt-4.1-mini", "version": "2026-01-01", "skus": [{"name": "Standard"}]}}]}
+        self.arm.canned[f"{base}/locations/canadaeast/usages"] = {"value": [
+            {"name": {"value": "OpenAI.Standard.gpt4.1-mini"}, "limit": 100, "currentValue": 10}]}
+        run(self.ctx, "preflight")
+        self.assertEqual(self.summary()["checks"]["model_quota"]["code"], "ok")
+
 
 class WriteEnvTests(_Base):
     def test_writes_complete_env_and_masks_connection_string(self):

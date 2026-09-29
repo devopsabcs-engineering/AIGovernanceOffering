@@ -646,8 +646,45 @@ def get_app_insights_logger(
         "logger_resource_id": logger.get("id"),
         "app_insights_resource_id": actual_resource_id,
         "description": props.get("description", ""),
-        "identity_client_id": credentials.get("identityClientId"),
+        "identity_client_id": _resolve_named_value_reference(
+            subscription_id, resource_group, apim_name, credentials.get("identityClientId")
+        ),
     }
+
+
+_NAMED_VALUE_REFERENCE = re.compile(r"^\{\{(?P<name>[^{}]+)\}\}$")
+
+
+def _resolve_named_value_reference(
+    subscription_id: str,
+    resource_group: str,
+    apim_name: str,
+    value: Optional[str],
+) -> Optional[str]:
+    """Return the plain value behind an APIM ``{{display-name}}`` credential reference.
+
+    APIM stores logger credentials as named values. A secret value the caller
+    may not list returns None ("not returned") rather than the literal token.
+    """
+    match = _NAMED_VALUE_REFERENCE.match(value or "")
+    if not match:
+        return value
+    display_name = match.group("name")
+    scope = _service_scope(subscription_id, resource_group, apim_name)
+    response = _request("GET", f"{scope}/namedValues", ok_statuses=[200])
+    for item in _json_body(response).get("value", []):
+        props = item.get("properties") or {}
+        if props.get("displayName") != display_name:
+            continue
+        if not props.get("secret") and props.get("value") is not None:
+            return props["value"]
+        listed = _request(
+            "POST", f"{scope}/namedValues/{item.get('name')}/listValue", ok_statuses=[200, 403]
+        )
+        if listed.status_code == 403:
+            return None
+        return _json_body(listed).get("value")
+    return None
 
 
 def ensure_api_diagnostic(
