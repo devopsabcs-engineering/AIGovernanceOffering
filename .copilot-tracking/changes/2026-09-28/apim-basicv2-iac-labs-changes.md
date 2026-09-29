@@ -72,6 +72,13 @@ Local-first implementation of the plan: notebook and shared-module safety fixes,
   * ID-01 option B: shared/results.py adds `OBSERVATIONAL_OBJECTIVES` (`demo3.stream_intervention`) and `blocks_verdict`; scripts/check_notebook_outputs.py and scripts/render_evidence.py use it; tests/test_evidence.py updated (292 tests OK); EN/FR lab 4 explain the observational objective.
   * Pushed f8c564e to main (user approved). CI run 36580181528 passed all 5 jobs (PSScriptAnalyzer, unit tests, site build and link crawl, bicep build and lint, actionlint).
   * Lock rehearsal (G4 part 1): lab-session lock-test 36580363027 held 14:08:12-14:12:15Z, teardown lock_test 36580396593 ran 14:12:18-14:16:21Z (no overlap); second lab-session lock-test 36580379495 was pending-replaced (expected GitHub behavior, recorded).
+  * CI run-existing 36581590972 failed at login-runtime: the repo uses immutable OIDC subjects. scripts/bootstrap-lab.ps1 now derives the subject from `sub_claim_prefix`; bootstrap re-applied (both federated credentials updated, test added).
+  * scripts/lab_session.py prints a content-free failure locator (cell index, id, exception class) for failed notebooks, with a test.
+  * CI runs 36603572857 and 36605259908 exposed propagation/ingestion timing: Demo 4 fault switches reached the gateway after the scored calls, and Demo 2 metrics finished ingesting after the retry schedule. Demo 4 now probes each mock member directly until each fault/heal switch is live (`demo4.switch_probe`, 72 mock attempts in the envelope; step cap 17 minutes); Demo 2 retry schedule extended to 765 s.
+  * CI run-existing 36608221120: verdict passed (18/18 required objectives; `demo3.stream_intervention` observational inconclusive).
+  * Added .github/workflows/pages.yml (Jekyll build + actions/deploy-pages, SHA-pinned, no Azure access) with a contract test; site live at https://devopsabcs-engineering.github.io/AIGovernanceOffering/ (EN and FR).
+  * Published reviewed PNGs from session 36608221120-1 to docs/assets/images/ and replaced the Lab 00-06 pending notes (EN/FR) with images and provenance; Lab 07 stays pending (teardown workflow emits no evidence; only full-session post-cleanup does).
+  * Teardown: dry run 36610409445 (active=7, failures=0), then execute 36610695597: status=clean, active=0, failures=0, tombstones=4, exposure=none_known; rg-aigov-lab is empty. Identity RG, OIDC apps, and GitHub environment are retained; purge of the 4 tombstones is operator-only.
 
 * Phase 1: notebooks gained stable cell IDs (nbformat 4.5 requirement) as a side effect of scripted edits.
   * Required for valid notebook format; no content change.
