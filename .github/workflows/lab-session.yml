@@ -1,0 +1,533 @@
+name: lab-session
+run-name: lab-session ${{ inputs.mode }} ${{ inputs.generation }}
+
+# Protected, manual lab session. One `cloud` job holds .env, budget state, and
+# secrets on a single runner; step conditions implement the Step 5.2 matrix.
+# live() == !cancelled() on paid steps; always() only on sanitize and cleanup.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Session mode
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - full-session
+          - deploy-only
+          - run-existing
+          - report-only
+          - dry-run
+          - lock-test
+      keep_environment:
+        description: Keep resources after the session (full-session only)
+        type: boolean
+        default: false
+      generation:
+        description: Ownership generation (default repository variable AIGOV_GENERATION)
+        type: string
+        required: false
+      confirm_resource_group:
+        description: Type the lab resource group name to confirm the target
+        type: string
+        required: false
+      report_window_start:
+        description: report-only window start (UTC, inclusive)
+        type: string
+        required: false
+      report_window_end:
+        description: report-only window end (UTC, exclusive)
+        type: string
+        required: false
+
+permissions: {}
+
+concurrency:
+  group: aigov-lab-env
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cloud:
+    name: cloud session
+    if: inputs.mode != 'lock-test'
+    runs-on: ubuntu-24.04
+    environment: lab
+    permissions:
+      id-token: write
+      contents: read
+    # Sum of every step cap (341) plus margin; the hosted-runner limit is 360.
+    timeout-minutes: 355
+    outputs:
+      evidence_ready: ${{ steps.sanitize.outputs.evidence_ready == 'true' && steps.upload_evidence.outcome == 'success' }}
+      session_id: ${{ steps.sanitize.outputs.session_id }}
+    env:
+      PYTHONUNBUFFERED: "1"
+      AIGOV_LAB_MODE: ${{ inputs.mode }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AIGOV_ENVIRONMENT_NAME: ${{ vars.AIGOV_ENVIRONMENT_NAME || 'lab' }}
+      AIGOV_LAB_RESOURCE_GROUP: ${{ vars.AIGOV_LAB_RESOURCE_GROUP }}
+      AIGOV_GENERATION: ${{ inputs.generation || vars.AIGOV_GENERATION }}
+      AIGOV_NAME_SUFFIX: ${{ vars.AIGOV_NAME_SUFFIX }}
+      AIGOV_LOCATION: ${{ vars.AIGOV_LOCATION }}
+      AIGOV_AI_LOCATION: ${{ vars.AIGOV_AI_LOCATION }}
+      AIGOV_CONTENT_SAFETY_LOCATION: ${{ vars.AIGOV_CONTENT_SAFETY_LOCATION }}
+      AIGOV_PUBLISHER_EMAIL: ${{ vars.AIGOV_PUBLISHER_EMAIL }}
+      AIGOV_PUBLISHER_NAME: ${{ vars.AIGOV_PUBLISHER_NAME || 'AI Governance Lab' }}
+      AIGOV_APIM_IDENTITY_RESOURCE_ID: ${{ vars.AIGOV_APIM_IDENTITY_RESOURCE_ID }}
+      AIGOV_APIM_IDENTITY_CLIENT_ID: ${{ vars.AIGOV_APIM_IDENTITY_CLIENT_ID }}
+      AIGOV_CHAT_MODEL_NAME: ${{ vars.AIGOV_CHAT_MODEL_NAME }}
+      AIGOV_CHAT_MODEL_VERSION: ${{ vars.AIGOV_CHAT_MODEL_VERSION }}
+      AIGOV_CHAT_DEPLOYMENT_SKU: ${{ vars.AIGOV_CHAT_DEPLOYMENT_SKU }}
+      AIGOV_CHAT_DEPLOYMENT_CAPACITY: ${{ vars.AIGOV_CHAT_DEPLOYMENT_CAPACITY }}
+      AIGOV_ALLOW_GLOBAL_PROCESSING: ${{ vars.AIGOV_ALLOW_GLOBAL_PROCESSING || 'false' }}
+      AIGOV_PRICE_SNAPSHOT: ${{ vars.AIGOV_PRICE_SNAPSHOT }}
+    steps:
+      - name: Record job start
+        timeout-minutes: 1
+        # Two minutes earlier than now so the deadline also covers runner setup.
+        run: echo "JOB_START_UTC=$(date -u -d '2 minutes ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      - name: Check out
+        timeout-minutes: 3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        timeout-minutes: 5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        timeout-minutes: 8
+        run: python -m pip install --disable-pip-version-check --no-input -r requirements-ci.txt
+
+      - name: init-session
+        id: init_session
+        if: inputs.mode != 'lock-test'
+        timeout-minutes: 2
+        env:
+          CONFIRM_RG: ${{ inputs.confirm_resource_group }}
+          KEEP_ENVIRONMENT: ${{ inputs.keep_environment }}
+        run: |
+          if [ -z "$CONFIRM_RG" ] || [ "$CONFIRM_RG" != "$AIGOV_LAB_RESOURCE_GROUP" ]; then
+            echo "::error::confirm_resource_group must equal the approved lab resource group."
+            exit 1
+          fi
+          if [ "$KEEP_ENVIRONMENT" = "true" ] && [ "$AIGOV_LAB_MODE" != "full-session" ]; then
+            echo "::error::keep_environment applies to full-session only."
+            exit 1
+          fi
+          # Post-work caps mirror the step caps below: cleanup login 1+3, cleanup 40,
+          # post-cleanup sanitize 3 and upload 3; the margin covers showback, checker,
+          # and the pre-cleanup sanitize and upload (18+3+3+3) plus slack.
+          args=(--job-start-utc "$JOB_START_UTC" --job-timeout-minutes 355
+                --cleanup-login-minutes 4 --cleanup-minutes 40
+                --post-sanitize-minutes 3 --upload-minutes 3 --margin-minutes 30)
+          if [ -n "$AIGOV_PRICE_SNAPSHOT" ]; then
+            args+=(--price-snapshot "$AIGOV_PRICE_SNAPSHOT")
+          fi
+          case "$AIGOV_LAB_MODE" in
+            full-session|deploy-only|run-existing) args+=(--require-price) ;;
+          esac
+          python scripts/lab_session.py init-session "${args[@]}"
+
+      - name: login-deploy
+        id: login_deploy
+        if: inputs.mode == 'dry-run' || inputs.mode == 'full-session' || inputs.mode == 'deploy-only'
+        timeout-minutes: 3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AIGOV_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: preflight
+        id: preflight
+        if: inputs.mode == 'dry-run' || inputs.mode == 'full-session' || inputs.mode == 'deploy-only'
+        timeout-minutes: 8
+        run: python scripts/lab_session.py preflight --params infra/main.bicepparam
+
+      - name: what-if
+        id: what_if
+        if: inputs.mode == 'dry-run' || inputs.mode == 'full-session' || inputs.mode == 'deploy-only'
+        timeout-minutes: 20
+        run: python scripts/lab_session.py what-if
+
+      - name: manifest-create
+        id: manifest_create
+        if: inputs.mode == 'full-session' || inputs.mode == 'deploy-only'
+        timeout-minutes: 5
+        run: python scripts/lab_session.py manifest create --mode "$AIGOV_LAB_MODE"
+
+      - name: upload manifest backup
+        id: upload_manifest
+        if: steps.manifest_create.outcome == 'success'
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aigov-manifest-${{ env.SESSION_ID }}
+          path: outputs/manifest/${{ env.SESSION_ID }}/
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
+
+      - name: deploy
+        id: deploy
+        if: steps.manifest_create.outcome == 'success'
+        timeout-minutes: 60
+        run: python scripts/lab_session.py deploy
+
+      - name: account-clear (runtime)
+        id: account_clear_runtime
+        if: ${{ !cancelled() && steps.init_session.outcome == 'success' && (inputs.mode == 'full-session' || inputs.mode == 'deploy-only' || inputs.mode == 'run-existing' || inputs.mode == 'report-only') }}
+        timeout-minutes: 1
+        run: az account clear
+
+      - name: login-runtime
+        id: login_runtime
+        if: ${{ !cancelled() && steps.init_session.outcome == 'success' && (inputs.mode == 'full-session' || inputs.mode == 'deploy-only' || inputs.mode == 'run-existing' || inputs.mode == 'report-only') }}
+        timeout-minutes: 3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AIGOV_RUNTIME_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: manifest-verify
+        id: manifest_verify
+        if: inputs.mode == 'run-existing' || inputs.mode == 'report-only'
+        timeout-minutes: 5
+        run: python scripts/lab_session.py manifest verify --mode "$AIGOV_LAB_MODE"
+
+      - name: write-env
+        id: write_env
+        if: steps.deploy.outcome == 'success' || steps.manifest_verify.outcome == 'success'
+        timeout-minutes: 5
+        run: python scripts/lab_session.py write-env
+
+      - name: readiness
+        id: readiness
+        if: steps.write_env.outcome == 'success' && (inputs.mode == 'full-session' || inputs.mode == 'deploy-only' || inputs.mode == 'run-existing')
+        timeout-minutes: 30
+        run: python scripts/lab_session.py readiness --check-timeout-seconds 180 --ingestion-timeout-seconds 600
+
+      - name: probe-scopes
+        id: probe_scopes
+        if: steps.readiness.outcome == 'success' && (inputs.mode == 'full-session' || inputs.mode == 'run-existing')
+        timeout-minutes: 8
+        run: python scripts/lab_session.py probe-scopes
+
+      - name: run-notebooks-init
+        id: nb_init
+        if: steps.probe_scopes.outcome == 'success' && (inputs.mode == 'full-session' || inputs.mode == 'run-existing')
+        timeout-minutes: 2
+        run: python scripts/lab_session.py run-notebooks --init
+
+      - name: login-runtime (00-setup-and-validation)
+        id: login_nb_setup
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' }}
+        timeout-minutes: 3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AIGOV_RUNTIME_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: notebook 00-setup-and-validation
+        id: nb_setup
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' && steps.login_nb_setup.outcome == 'success' }}
+        timeout-minutes: 10
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+        run: python scripts/lab_session.py run-notebooks --only 00-setup-and-validation --timeout-seconds 540
+
+      - name: login-runtime (demo1-token-limits)
+        id: login_nb_demo1
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' }}
+        timeout-minutes: 3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AIGOV_RUNTIME_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: notebook demo1-token-limits
+        id: nb_demo1
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' && steps.login_nb_demo1.outcome == 'success' }}
+        timeout-minutes: 12
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+        run: python scripts/lab_session.py run-notebooks --only demo1-token-limits --timeout-seconds 660
+
+      - name: login-runtime (demo2-token-metrics)
+        id: login_nb_demo2
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' }}
+        timeout-minutes: 3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AIGOV_RUNTIME_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: notebook demo2-token-metrics
+        id: nb_demo2
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' && steps.login_nb_demo2.outcome == 'success' }}
+        timeout-minutes: 20
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+        run: |
+          # Cache the Log Analytics audience right after login, while the federated assertion is fresh.
+          az account get-access-token --scope https://api.loganalytics.io/.default --output none
+          python scripts/lab_session.py run-notebooks --only demo2-token-metrics --timeout-seconds 1140
+
+      - name: login-runtime (demo3-content-safety)
+        id: login_nb_demo3
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' }}
+        timeout-minutes: 3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AIGOV_RUNTIME_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: notebook demo3-content-safety
+        id: nb_demo3
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' && steps.login_nb_demo3.outcome == 'success' }}
+        timeout-minutes: 12
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+        run: python scripts/lab_session.py run-notebooks --only demo3-content-safety --timeout-seconds 660
+
+      - name: login-runtime (demo4-resilient-pool)
+        id: login_nb_demo4
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' }}
+        timeout-minutes: 3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AIGOV_RUNTIME_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: notebook demo4-resilient-pool
+        id: nb_demo4
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' && steps.login_nb_demo4.outcome == 'success' }}
+        timeout-minutes: 12
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+        run: python scripts/lab_session.py run-notebooks --only demo4-resilient-pool --timeout-seconds 660
+
+      - name: login-runtime-traffic
+        id: login_traffic
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' }}
+        timeout-minutes: 3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AIGOV_RUNTIME_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: traffic
+        id: traffic
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' && steps.login_traffic.outcome == 'success' }}
+        timeout-minutes: 8
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+        run: python scripts/generate_traffic.py
+
+      - name: showback-report
+        id: showback
+        if: ${{ !cancelled() && ((steps.nb_init.outcome == 'success' && steps.traffic.outcome == 'success') || (inputs.mode == 'report-only' && steps.write_env.outcome == 'success')) }}
+        timeout-minutes: 18
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          WINDOW_START: ${{ inputs.report_window_start }}
+          WINDOW_END: ${{ inputs.report_window_end }}
+        run: |
+          az account get-access-token --scope https://api.loganalytics.io/.default --output none
+          args=()
+          if [ -n "$AIGOV_PRICE_SNAPSHOT" ]; then
+            args+=(--price-snapshot "$AIGOV_PRICE_SNAPSHOT")
+          fi
+          if [ "$AIGOV_LAB_MODE" = "report-only" ]; then
+            # Input window, no traffic manifest: the report is labelled unreconciled.
+            args+=(--window-start "$WINDOW_START" --window-end "$WINDOW_END")
+          fi
+          python scripts/showback_report.py "${args[@]}"
+
+      - name: check-notebooks
+        id: check_notebooks
+        if: ${{ !cancelled() && steps.nb_init.outcome == 'success' }}
+        timeout-minutes: 3
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+        run: python scripts/check_notebook_outputs.py
+
+      - name: sanitize (pre-cleanup evidence)
+        id: sanitize
+        if: ${{ always() && steps.init_session.outcome == 'success' && inputs.mode != 'dry-run' }}
+        timeout-minutes: 3
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+        run: |
+          python scripts/render_evidence.py sanitize --phase pre-cleanup
+          {
+            echo "evidence_ready=true"
+            echo "session_id=$SESSION_ID"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: upload evidence
+        id: upload_evidence
+        if: ${{ always() && steps.init_session.outcome == 'success' && inputs.mode != 'dry-run' && steps.sanitize.outcome == 'success' }}
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aigov-evidence-${{ env.SESSION_ID }}
+          path: |
+            outputs/evidence/${{ env.SESSION_ID }}/evidence.json
+            outputs/manifest/${{ env.SESSION_ID }}/
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
+
+      - name: account-clear (cleanup)
+        id: account_clear_cleanup
+        if: ${{ always() && steps.init_session.outcome == 'success' && (inputs.mode == 'full-session' || inputs.mode == 'deploy-only') }}
+        timeout-minutes: 1
+        run: az account clear
+
+      - name: login-deploy-cleanup
+        id: login_deploy_cleanup
+        if: ${{ always() && steps.init_session.outcome == 'success' && (inputs.mode == 'full-session' || inputs.mode == 'deploy-only') }}
+        timeout-minutes: 3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AIGOV_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: cleanup
+        id: cleanup
+        if: ${{ always() && steps.init_session.outcome == 'success' && (inputs.mode == 'full-session' || inputs.mode == 'deploy-only') }}
+        timeout-minutes: 40
+        env:
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          READINESS_OUTCOME: ${{ steps.readiness.outcome }}
+          KEEP_ENVIRONMENT: ${{ inputs.keep_environment }}
+          CONFIRM_RG: ${{ inputs.confirm_resource_group }}
+        run: python scripts/lab_session.py cleanup --auto --mode "$AIGOV_LAB_MODE" --confirm-resource-group "$CONFIRM_RG" --timeout-seconds 2100
+
+      - name: sanitize (post-cleanup evidence)
+        id: post_sanitize
+        if: ${{ always() && steps.init_session.outcome == 'success' && (inputs.mode == 'full-session' || inputs.mode == 'deploy-only') }}
+        timeout-minutes: 3
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+        run: python scripts/render_evidence.py sanitize --phase post-cleanup
+
+      - name: upload evidence (post-cleanup)
+        id: upload_post
+        if: ${{ always() && steps.init_session.outcome == 'success' && (inputs.mode == 'full-session' || inputs.mode == 'deploy-only') && steps.post_sanitize.outcome == 'success' }}
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aigov-evidence-${{ env.SESSION_ID }}
+          path: |
+            outputs/evidence/${{ env.SESSION_ID }}/evidence.json
+            outputs/manifest/${{ env.SESSION_ID }}/
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
+
+  render:
+    name: render evidence (no credentials, no network)
+    needs: cloud
+    if: always() && needs.cloud.outputs.evidence_ready == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        timeout-minutes: 3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        timeout-minutes: 5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install renderer dependencies (network allowed, before isolation)
+        timeout-minutes: 10
+        run: |
+          python -m venv "$RUNNER_TEMP/render-venv"
+          "$RUNNER_TEMP/render-venv/bin/python" -m pip install --disable-pip-version-check --no-input -r requirements-ci.txt
+
+      - name: Download evidence
+        timeout-minutes: 3
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aigov-evidence-${{ needs.cloud.outputs.session_id }}
+          path: ${{ runner.temp }}/evidence-in
+
+      - name: Render PNGs with networking disabled
+        timeout-minutes: 5
+        # A fresh network namespace (sudo unshare --net) has only a down loopback, so the
+        # renderer cannot reach any host; setpriv drops back to the runner user inside it.
+        # Dependencies were installed into the venv beforehand, so no container image is needed.
+        run: |
+          mapfile -t found < <(find "$RUNNER_TEMP/evidence-in" -type f -name evidence.json)
+          if [ "${#found[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one evidence.json in the artifact."
+            exit 1
+          fi
+          py="$RUNNER_TEMP/render-venv/bin/python"
+          out="$RUNNER_TEMP/png"
+          mkdir -p "$out" "$RUNNER_TEMP/mpl"
+          isolated=(sudo unshare --net -- setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups --
+                    env HOME="$HOME" MPLCONFIGDIR="$RUNNER_TEMP/mpl" "$py")
+          # Prove isolation first: an outbound connection must fail inside the namespace.
+          "${isolated[@]}" -c 'import socket, sys; s = socket.socket(); s.settimeout(3); sys.exit(0 if s.connect_ex(("1.1.1.1", 443)) else 1)'
+          "${isolated[@]}" scripts/render_evidence.py render --evidence "${found[0]}" --out-dir "$out"
+
+      - name: Upload PNGs
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aigov-png-${{ needs.cloud.outputs.session_id }}
+          path: ${{ runner.temp }}/png/*.png
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
+
+  lock-test:
+    name: lock rehearsal (no environment, no Azure)
+    if: inputs.mode == 'lock-test'
+    runs-on: ubuntu-24.04
+    permissions: {}
+    timeout-minutes: 8
+    steps:
+      - name: Hold the workflow lock
+        timeout-minutes: 6
+        run: |
+          echo "Holding concurrency group aigov-lab-env for 240 seconds."
+          sleep 240

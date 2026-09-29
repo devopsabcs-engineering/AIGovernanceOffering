@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "description": "Nonsecret inventory of every notebook inference, safety, and mock call site routed through shared.budget.guarded_request. Labels match the label= argument at each call site. estimated_input_tokens uses shared.budget.estimate_prompt_tokens on the largest fixed prompt for the site; reserved_tokens = max_attempts * (estimated_input_tokens + max_output_tokens) for model and safety kinds and 0 for mock. Management-plane (ARM) calls are not budgeted.",
+  "notebooks": {
+    "00-setup-and-validation": {
+      "call_sites": []
+    },
+    "demo1-token-limits": {
+      "call_sites": [
+        {"label": "demo1.baseline_call", "kind": "model", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 27, "max_output_tokens": 50, "stream": false, "client_retries": 0, "reserved_tokens": 77},
+        {"label": "demo1.burst_call", "kind": "model", "enabled": true, "max_attempts": 20, "estimated_input_tokens": 22, "max_output_tokens": 30, "stream": false, "client_retries": 0, "reserved_tokens": 1040},
+        {"label": "demo1.daily_call", "kind": "model", "enabled": true, "max_attempts": 60, "estimated_input_tokens": 29, "max_output_tokens": 20, "stream": false, "client_retries": 0, "reserved_tokens": 2940, "note": "Bounded loop of 60 iterations and 180 seconds; after a 429 it waits for Retry-After and the next iteration is a new counted attempt."},
+        {"label": "demo1.reset_call", "kind": "model", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 25, "max_output_tokens": 50, "stream": false, "client_retries": 0, "reserved_tokens": 75}
+      ]
+    },
+    "demo2-token-metrics": {
+      "call_sites": [
+        {"label": "demo2.baseline_call", "kind": "model", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 27, "max_output_tokens": 40, "stream": false, "client_retries": 0, "reserved_tokens": 67},
+        {"label": "demo2.traffic_call", "kind": "model", "enabled": true, "max_attempts": 8, "estimated_input_tokens": 35, "max_output_tokens": 50, "stream": false, "client_retries": 0, "reserved_tokens": 680},
+        {"label": "demo2.optional_stream_call", "kind": "model", "enabled": false, "max_attempts": 0, "estimated_input_tokens": 25, "max_output_tokens": 40, "stream": true, "client_retries": 0, "reserved_tokens": 0, "note": "Commented out in the notebook; enabling it requires a revised envelope."}
+      ]
+    },
+    "demo3-content-safety": {
+      "call_sites": [
+        {"label": "demo3.matrix_call", "kind": "safety", "enabled": true, "max_attempts": 3, "estimated_input_tokens": 67, "max_output_tokens": 200, "stream": false, "client_retries": 0, "reserved_tokens": 801},
+        {"label": "demo3.stream_call", "kind": "safety", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 68, "max_output_tokens": 300, "stream": true, "client_retries": 0, "reserved_tokens": 368}
+      ]
+    },
+    "demo4-resilient-pool": {
+      "call_sites": [
+        {"label": "demo4.inference_call", "kind": "model", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 25, "max_output_tokens": 40, "stream": false, "client_retries": 0, "reserved_tokens": 65},
+        {"label": "demo4.routing_call", "kind": "mock", "enabled": true, "max_attempts": 74, "estimated_input_tokens": 0, "max_output_tokens": 0, "stream": false, "client_retries": 0, "reserved_tokens": 0, "note": "CALL 1, CALL 2, 30 weighted, 12 East-fault, 6 Central, 12 both-fault, and 12 recovery calls to the APIM-hosted mock origin."},
+        {"label": "demo4.mock_auth_probe", "kind": "mock", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 0, "max_output_tokens": 0, "stream": false, "client_retries": 0, "reserved_tokens": 0}
+      ]
+    }
+  },
+  "totals": {
+    "max_attempts": 171,
+    "model_and_safety_attempts": 96,
+    "mock_attempts": 75,
+    "max_reserved_tokens": 6113
+  }
+}

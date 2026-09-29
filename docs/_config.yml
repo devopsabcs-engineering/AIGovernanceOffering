@@ -1,0 +1,46 @@
+title: "AI Governance Labs"
+description: "Bilingual hands-on labs that govern Microsoft Foundry models behind Azure API Management with policy, bounded evidence, estimated showback, and owned-resource teardown."
+remote_theme: just-the-docs/just-the-docs@v0.10.1
+# GitHub Pages enables this plugin implicitly; local and CI builds need it listed.
+plugins:
+  - jekyll-remote-theme
+# Public repository: Pages serves under /<repo-name>/, so every internal link and image uses relative_url.
+baseurl: "/AIGovernanceOffering"
+url: "https://devopsabcs-engineering.github.io"
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: "default"
+  - scope:
+      path: "assets"
+    values:
+      nav_exclude: true
+
+heading_anchors: true
+search_enabled: true
+
+aux_links:
+  "Repository on GitHub":
+    - "https://github.com/devopsabcs-engineering/AIGovernanceOffering"
+aux_links_new_tab: true
+
+# GitHub-style alerts (> [!NOTE]) are mapped onto these classes by _includes/head_custom.html.
+callouts_level: quiet
+callouts:
+  note:
+    color: blue
+  tip:
+    color: green
+  important:
+    color: purple
+  warning:
+    color: yellow
+  caution:
+    color: red

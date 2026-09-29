@@ -1,6 +1,9 @@
 <policies>
   <inbound>
     <base />
+    <!-- Client subscription credentials stay at the gateway; never forward them to the model. -->
+    <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+    <set-query-parameter name="subscription-key" exists-action="delete" />
     <set-backend-service backend-id="demo3-openai-backend" />
     <!--
       Backend authentication: the Azure OpenAI / Microsoft Foundry resource has
@@ -69,9 +72,10 @@
       Streaming limitation (documented, not a bug): per Microsoft's docs, for
       streaming responses the policy buffers a sliding window of events and,
       on a violation, silently stops forwarding further events to the
-      client - it does not raise a 403/on-error for that case. The notebook
-      therefore verifies the streaming case by observing that the stream
-      ends early (no trailing "[DONE]" event), not by checking a status code.
+      client - it does not raise a 403/on-error for that case. A stream that
+      merely ends without its trailing "[DONE]" event is therefore treated as
+      inconclusive; the notebook confirms an interruption only when content
+      safety policy evidence accompanies it.
     -->
     <llm-content-safety backend-id="demo3-content-safety-backend"
         window-size="1000"

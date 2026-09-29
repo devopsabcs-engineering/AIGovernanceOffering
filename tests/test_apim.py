@@ -1,10 +1,40 @@
+import os
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from shared import apim
+from shared import apim, config
+
+POLICIES = Path(__file__).resolve().parents[1] / "policies"
+CLIENT_ID = "11111111-2222-3333-4444-555555555555"
+
+
+class ApimErrorRedactionTests(unittest.TestCase):
+    def test_exception_redacts_known_secret_fields_and_truncates(self):
+        body = (
+            '{"primaryKey": "pk-fake-0123456789", "secondaryKey": "sk-fake", '
+            '"connectionString": "InstrumentationKey=abc;IngestionEndpoint=x", '
+            '"headers": {"Authorization": "Bearer fake.jwt.token", '
+            '"Ocp-Apim-Subscription-Key": "subkey-fake"}, "api-key": "aoai-fake", '
+            '"padding": "' + "x" * 800 + '"}'
+        )
+        response = SimpleNamespace(status_code=400, text=body)
+        error = apim.ApimError("POST", "https://example.test/listSecrets?subscription-key=qs-fake", response)
+
+        message = str(error)
+        for secret in ("pk-fake", "sk-fake", "InstrumentationKey=abc", "fake.jwt.token",
+                       "subkey-fake", "aoai-fake", "qs-fake"):
+            self.assertNotIn(secret, message)
+        self.assertIn("***REDACTED***", message)
+        self.assertIn("truncated", error.body)
+        self.assertLessEqual(len(error.body), 600)
+
+    def test_plain_header_text_is_redacted(self):
+        text = apim.redact_secrets("Authorization: Bearer abc.def api-key=xyz")
+        self.assertNotIn("abc.def", text)
+        self.assertNotIn("xyz", text)
 
 
 class ApimPolicyTests(unittest.TestCase):
@@ -137,6 +167,78 @@ class ApimPolicyTests(unittest.TestCase):
             "404",
         )
 
+    def test_demo1_to_3_strip_client_subscription_credentials(self):
+        for name in ("demo1-token-limit.xml", "demo2-emit-token-metric.xml", "demo3-content-safety.xml"):
+            with self.subTest(policy=name):
+                inbound = ET.parse(POLICIES / name).getroot().find("inbound")
+                children = list(inbound)
+                tags = [child.tag for child in children]
+                header = next(
+                    child for child in children
+                    if child.tag == "set-header"
+                    and child.attrib.get("name") == "Ocp-Apim-Subscription-Key"
+                )
+                query = next(
+                    child for child in children
+                    if child.tag == "set-query-parameter"
+                    and child.attrib.get("name") == "subscription-key"
+                )
+                self.assertEqual(header.attrib["exists-action"], "delete")
+                self.assertEqual(query.attrib["exists-action"], "delete")
+                self.assertLess(children.index(header), tags.index("set-backend-service"))
+                self.assertLess(children.index(query), tags.index("set-backend-service"))
+
+    def test_policy_files_have_no_hardcoded_client_id(self):
+        for path in POLICIES.glob("demo*.xml"):
+            with self.subTest(policy=path.name):
+                self.assertNotIn("client-id", path.read_text(encoding="utf-8"))
+
+
+class ApplyIdentityClientIdTests(unittest.TestCase):
+    SELF_CLOSING = '<inbound><authentication-managed-identity resource="https://cognitiveservices.azure.com" /></inbound>'
+    MULTI_LINE = (
+        '<inbound>\n    <authentication-managed-identity resource="https://cognitiveservices.azure.com"\n'
+        '        output-token-variable-name="aoai-token" ignore-error="false" />\n</inbound>'
+    )
+
+    def test_unset_client_id_leaves_policy_unchanged(self):
+        for client_id in (None, "", "   "):
+            self.assertEqual(apim.apply_identity_client_id(self.MULTI_LINE, client_id), self.MULTI_LINE)
+
+    def test_injects_into_self_closing_element(self):
+        updated = apim.apply_identity_client_id(self.SELF_CLOSING, CLIENT_ID)
+        element = ET.fromstring(updated).find("authentication-managed-identity")
+        self.assertEqual(element.attrib["client-id"], CLIENT_ID)
+        self.assertEqual(element.attrib["resource"], "https://cognitiveservices.azure.com")
+
+    def test_injects_into_multi_line_element_and_is_idempotent(self):
+        once = apim.apply_identity_client_id(self.MULTI_LINE, CLIENT_ID)
+        twice = apim.apply_identity_client_id(once, CLIENT_ID)
+        self.assertEqual(once, twice)
+        self.assertEqual(once.count("client-id="), 1)
+        element = ET.fromstring(once).find("authentication-managed-identity")
+        self.assertEqual(element.attrib["output-token-variable-name"], "aoai-token")
+
+    def test_replaces_a_different_existing_client_id(self):
+        other = "99999999-2222-3333-4444-555555555555"
+        updated = apim.apply_identity_client_id(
+            apim.apply_identity_client_id(self.SELF_CLOSING, other), CLIENT_ID
+        )
+        self.assertIn(CLIENT_ID, updated)
+        self.assertNotIn(other, updated)
+
+    def test_every_real_policy_element_is_updated(self):
+        for name in ("demo1-token-limit.xml", "demo4-resilient-pool.xml"):
+            with self.subTest(policy=name):
+                xml = (POLICIES / name).read_text(encoding="utf-8")
+                root = ET.fromstring(apim.apply_identity_client_id(xml, CLIENT_ID))
+                elements = root.iter("authentication-managed-identity")
+                self.assertTrue(all(e.attrib["client-id"] == CLIENT_ID for e in elements))
+
+    def test_rejects_non_guid_client_id(self):
+        with self.assertRaisesRegex(ValueError, "GUID"):
+            apim.apply_identity_client_id(self.SELF_CLOSING, '" injected="1')
+
 
 class EnsureBackendTests(unittest.TestCase):
     def test_put_body_omits_credentials_when_not_supplied(self):
@@ -182,6 +284,23 @@ class EnsureBackendTests(unittest.TestCase):
             properties["credentials"]["managedIdentity"]["resource"],
             "https://cognitiveservices.azure.com",
         )
+
+    def test_managed_identity_credentials_add_client_id_only_when_configured(self):
+        self.assertEqual(
+            apim.managed_identity_backend_credentials(None),
+            {"managedIdentity": {"resource": "https://cognitiveservices.azure.com"}},
+        )
+        self.assertEqual(
+            apim.managed_identity_backend_credentials(CLIENT_ID),
+            {"managedIdentity": {"resource": "https://cognitiveservices.azure.com",
+                                 "clientId": CLIENT_ID}},
+        )
+
+    def test_backend_credential_header_names_never_return_values(self):
+        backend = {"properties": {"credentials": {"header": {"Ocp-Apim-Subscription-Key": ["secret"]}}}}
+        self.assertEqual(apim.backend_credential_header_names(backend), ["Ocp-Apim-Subscription-Key"])
+        self.assertEqual(apim.backend_credential_header_names({"properties": {}}), [])
+        self.assertEqual(apim.backend_credential_header_names(None), [])
 
     def test_put_body_includes_circuit_breaker(self):
         response = SimpleNamespace(status_code=200, content=b"{}", text="{}")
@@ -336,68 +455,174 @@ class EnsureLoggerTests(unittest.TestCase):
         properties = request.call_args.kwargs["json_body"]["properties"]
         self.assertEqual(properties["resourceId"], resource_id)
         self.assertEqual(
-            properties["credentials"]["connectionString"],
-            "InstrumentationKey=key",
+            properties["credentials"],
+            {"connectionString": "InstrumentationKey=key", "identityClientId": "SystemAssigned"},
         )
 
-    def test_put_body_omits_blank_resource_id(self):
+    def _logger_credentials(self, **kwargs):
         response = SimpleNamespace(status_code=200, content=b"{}", text="{}")
-
         with patch.object(apim, "_request", return_value=response) as request:
             apim.ensure_logger(
-                "sub",
-                "rg",
-                "apim",
-                "logger",
-                app_insights_resource_id="   ",
-                app_insights_connection_string="InstrumentationKey=key",
+                "sub", "rg", "apim", "demo2-application-insights",
+                app_insights_connection_string="InstrumentationKey=key", **kwargs,
             )
+        return request.call_args.kwargs["json_body"]["properties"]["credentials"]
 
-        properties = request.call_args.kwargs["json_body"]["properties"]
-        self.assertNotIn("resourceId", properties)
-        self.assertEqual(
-            properties["credentials"]["connectionString"],
-            "InstrumentationKey=key",
-        )
+    def test_user_assigned_identity_client_id_is_written(self):
+        credentials = self._logger_credentials(identity_client_id=CLIENT_ID)
+        self.assertEqual(credentials["identityClientId"], CLIENT_ID)
+
+    def test_blank_identity_defaults_to_system_assigned(self):
+        for client_id in (None, "", "  "):
+            with self.subTest(client_id=client_id):
+                credentials = self._logger_credentials(identity_client_id=client_id)
+                self.assertEqual(credentials["identityClientId"], "SystemAssigned")
+
+    def test_connection_string_only_requires_explicit_flag(self):
+        with patch.dict(os.environ, {"AIGOV_HEADLESS": ""}):
+            credentials = self._logger_credentials(allow_local_auth=True)
+        self.assertEqual(credentials, {"connectionString": "InstrumentationKey=key"})
+
+    def test_headless_rejects_local_auth_logger(self):
+        with patch.dict(os.environ, {"AIGOV_HEADLESS": "1"}):
+            with patch.object(apim, "_request") as request:
+                with self.assertRaisesRegex(config.ConfigError, "headless"):
+                    apim.ensure_logger(
+                        "sub", "rg", "apim", "demo2-application-insights",
+                        app_insights_connection_string="InstrumentationKey=key",
+                        allow_local_auth=True,
+                    )
+            request.assert_not_called()
+
+    def test_local_auth_flag_is_rejected_in_headless_mode(self):
+        with patch.dict(os.environ, {"AIGOV_HEADLESS": "1", "DEMO2_ALLOW_LOCAL_AUTH_LOGGER": "true"}):
+            with self.assertRaises(config.ConfigError):
+                config.local_auth_logger_allowed()
+        with patch.dict(os.environ, {"AIGOV_HEADLESS": "", "DEMO2_ALLOW_LOCAL_AUTH_LOGGER": "true"}):
+            self.assertTrue(config.local_auth_logger_allowed())
+        with patch.dict(os.environ, {"AIGOV_HEADLESS": "1", "DEMO2_ALLOW_LOCAL_AUTH_LOGGER": ""}):
+            self.assertFalse(config.local_auth_logger_allowed())
+
+    def test_platform_logger_is_never_written(self):
+        for logger_id in ("apimlogger", "APIMLogger"):
+            with self.subTest(logger_id=logger_id):
+                with patch.object(apim, "_request") as request:
+                    with self.assertRaisesRegex(ValueError, "platform-owned"):
+                        apim.ensure_logger(
+                            "sub", "rg", "apim", logger_id,
+                            app_insights_connection_string="InstrumentationKey=key",
+                        )
+                request.assert_not_called()
+
+
+class GetAppInsightsLoggerTests(unittest.TestCase):
+    APPI = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Insights/components/appi"
+
+    def _logger(self, resource_id, identity="SystemAssigned", logger_type="applicationInsights"):
+        return {
+            "id": "/subscriptions/sub/.../loggers/demo2-application-insights",
+            "properties": {
+                "loggerType": logger_type,
+                "resourceId": resource_id,
+                "credentials": {"connectionString": "{{Logger-Credentials--x}}", "identityClientId": identity},
+            },
+        }
+
+    def test_absent_logger_returns_none(self):
+        with patch.object(apim, "get_logger", return_value=None) as get_logger:
+            self.assertIsNone(apim.get_app_insights_logger("sub", "rg", "apim", "demo2-application-insights", self.APPI))
+        get_logger.assert_called_once_with("sub", "rg", "apim", "demo2-application-insights")
+
+    def test_matching_logger_returns_identity(self):
+        with patch.object(apim, "get_logger", return_value=self._logger(self.APPI.upper() + "/")):
+            info = apim.get_app_insights_logger("sub", "rg", "apim", "demo2-application-insights", self.APPI)
+        self.assertEqual(info["identity_client_id"], "SystemAssigned")
+        self.assertEqual(info["logger_id"], "demo2-application-insights")
+
+    def test_different_destination_raises(self):
+        other = self.APPI.replace("appi", "other")
+        with patch.object(apim, "get_logger", return_value=self._logger(other)):
+            with self.assertRaisesRegex(ValueError, "different Application Insights"):
+                apim.get_app_insights_logger("sub", "rg", "apim", "demo2-application-insights", self.APPI)
+
+    def test_wrong_logger_type_raises(self):
+        with patch.object(apim, "get_logger", return_value=self._logger(self.APPI, logger_type="azureEventHub")):
+            with self.assertRaisesRegex(ValueError, "not an Application Insights"):
+                apim.get_app_insights_logger("sub", "rg", "apim", "demo2-application-insights")
+
+    def test_first_logger_discovery_is_removed(self):
+        self.assertFalse(hasattr(apim, "get_app_insights_for_apim"))
+        with patch.object(apim, "list_loggers", side_effect=AssertionError("no discovery")), \
+                patch.object(apim, "get_logger", return_value=None):
+            apim.get_app_insights_logger("sub", "rg", "apim", "demo2-application-insights")
 
 
 class EnsureApiDiagnosticTests(unittest.TestCase):
-    def test_llm_request_has_no_logs_property(self):
+    def _put_properties(self, logger_id="logger"):
         response = SimpleNamespace(status_code=200, content=b"{}", text="{}")
         with patch.object(apim, "_request", return_value=response) as request:
-            apim.ensure_api_diagnostic("sub", "rg", "apim", "api", "logger")
+            apim.ensure_api_diagnostic("sub", "rg", "apim", "api", logger_id)
+        self.assertEqual(request.call_count, 1)
+        return request.call_args.kwargs["json_body"]["properties"]
 
-        properties = request.call_args.kwargs["json_body"]["properties"]
-        self.assertNotIn("logs", properties["largeLanguageModel"])
+    def test_put_body_has_no_llm_message_capture(self):
+        properties = self._put_properties()
+        self.assertNotIn("largeLanguageModel", properties)
+        self.assertNotIn("messages", repr(properties))
         self.assertEqual(properties["alwaysLog"], "allErrors")
         self.assertIs(properties["metrics"], True)
-        self.assertIn("loggerId", properties)
+        self.assertTrue(properties["loggerId"].endswith("/loggers/logger"))
         self.assertIn("sampling", properties)
-        self.assertIn("frontend", properties)
-        self.assertIn("backend", properties)
 
-    def test_retries_without_llm_block_after_matching_validation_error(self):
-        failed_response = SimpleNamespace(
-            status_code=400, text="Invalid field 'LARGELANGUAGEMODEL' specified"
-        )
-        error = apim.ApimError("PUT", "https://example.test", failed_response)
-        response = SimpleNamespace(status_code=200, content=b"{}", text="{}")
-        with patch.object(apim, "_request", side_effect=[error, response]) as request:
-            apim.ensure_api_diagnostic("sub", "rg", "apim", "api", "logger")
+    def test_put_body_logs_no_http_bodies_or_headers(self):
+        properties = self._put_properties()
+        for pipeline in ("frontend", "backend"):
+            for direction in ("request", "response"):
+                settings = properties[pipeline][direction]
+                self.assertEqual(settings["body"]["bytes"], 0)
+                self.assertEqual(settings["headers"], [])
 
-        self.assertEqual(request.call_count, 2)
-        fallback_properties = request.call_args.kwargs["json_body"]["properties"]
-        self.assertNotIn("largeLanguageModel", fallback_properties)
-        self.assertIs(fallback_properties["metrics"], True)
+    def test_put_body_passes_privacy_readback_check(self):
+        evidence = apim.assert_no_llm_message_capture({"properties": self._put_properties()})
+        self.assertEqual(evidence["max_body_bytes"], 0)
+        self.assertFalse(evidence["llm_block_present"])
 
-    def test_reraises_unrelated_error_without_retrying(self):
+    def test_platform_logger_is_rejected(self):
+        with patch.object(apim, "_request") as request:
+            with self.assertRaisesRegex(ValueError, "platform-owned"):
+                apim.ensure_api_diagnostic("sub", "rg", "apim", "api", "apimlogger")
+        request.assert_not_called()
+
+    def test_errors_are_not_retried_with_other_settings(self):
         failed_response = SimpleNamespace(status_code=400, text="Invalid field 'loggerId'")
         error = apim.ApimError("PUT", "https://example.test", failed_response)
         with patch.object(apim, "_request", side_effect=error) as request:
             with self.assertRaisesRegex(apim.ApimError, "loggerId"):
                 apim.ensure_api_diagnostic("sub", "rg", "apim", "api", "logger")
-
         self.assertEqual(request.call_count, 1)
+
+
+class AssertNoLlmMessageCaptureTests(unittest.TestCase):
+    def test_rejects_message_capture_and_body_bytes(self):
+        failing = [
+            None,
+            {"properties": {"largeLanguageModel": {"requests": {"messages": "all"}}}},
+            {"properties": {"largeLanguageModel": {"logs": "enabled"}}},
+            {"properties": {"frontend": {"request": {"body": {"bytes": 8192}}}}},
+            {"properties": {"backend": {"response": {"body": {"bytes": 1}}}}},
+        ]
+        for diagnostic in failing:
+            with self.subTest(diagnostic=diagnostic):
+                with self.assertRaises(apim.PrivacyConfigurationError):
+                    apim.assert_no_llm_message_capture(diagnostic)
+
+    def test_accepts_disabled_llm_logs(self):
+        evidence = apim.assert_no_llm_message_capture({"properties": {
+            "metrics": True,
+            "largeLanguageModel": {"logs": "disabled", "requests": {"messages": "all"}},
+        }})
+        self.assertEqual(evidence["llm_logs"], "disabled")
+        self.assertTrue(evidence["metrics"])
 
 
 class GetApiPolicyTests(unittest.TestCase):
@@ -478,7 +703,7 @@ class TokenMetricsTests(unittest.TestCase):
             patch("shared.auth.get_credential", return_value=object()),
             patch.object(
                 apim,
-                "get_app_insights_for_apim",
+                "get_app_insights_logger",
                 return_value={"app_insights_resource_id": self.APP_INSIGHTS_ID},
             ) as resolve,
         ):
@@ -486,9 +711,10 @@ class TokenMetricsTests(unittest.TestCase):
                 resource_id=self.RESOURCE_ID,
                 metric_names=["prompt_tokens"],
                 subscription_filter="demo-sub",
+                logger_id="demo2-application-insights",
             )
 
-        resolve.assert_called_once_with("sub", "rg", "apim")
+        resolve.assert_called_once_with("sub", "rg", "apim", "demo2-application-insights")
         self.assertEqual(calls[0]["resource_id"], self.APP_INSIGHTS_ID)
         self.assertIn("customMetrics", calls[0]["query"])
         self.assertIn("'demo-sub'", calls[0]["query"])
@@ -513,28 +739,39 @@ class TokenMetricsTests(unittest.TestCase):
             patch.dict("sys.modules", {"azure.monitor.query": monitor_query}),
             patch("shared.auth.get_credential", return_value=object()),
             patch.object(
-                apim, "get_app_insights_for_apim", side_effect=AssertionError("no ARM call")
+                apim, "get_app_insights_logger", side_effect=AssertionError("no ARM call")
             ),
         ):
             rows = apim.query_token_metrics(
                 resource_id=self.RESOURCE_ID,
                 metric_names=["prompt_tokens"],
                 app_insights_resource_id=self.APP_INSIGHTS_ID,
+                logger_id="demo2-application-insights",
             )
 
         self.assertEqual(rows, [])
         self.assertEqual(calls[0]["resource_id"], self.APP_INSIGHTS_ID)
 
-    def test_query_token_metrics_raises_when_app_insights_cannot_be_resolved(self):
-        with patch.object(apim, "get_app_insights_for_apim", return_value=None):
+    def test_query_token_metrics_raises_without_explicit_target(self):
+        with patch.object(
+            apim, "get_app_insights_logger", side_effect=AssertionError("no discovery")
+        ):
             with self.assertRaisesRegex(RuntimeError, "Application Insights"):
                 apim.query_token_metrics(
                     resource_id=self.RESOURCE_ID, metric_names=["prompt_tokens"]
                 )
 
+    def test_query_token_metrics_raises_when_named_logger_is_absent(self):
+        with patch.object(apim, "get_app_insights_logger", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "Application Insights"):
+                apim.query_token_metrics(
+                    resource_id=self.RESOURCE_ID, metric_names=["prompt_tokens"],
+                    logger_id="demo2-application-insights",
+                )
+
     def test_app_insights_resolution_ignores_malformed_resource_ids(self):
         with patch.object(
-            apim, "get_app_insights_for_apim", side_effect=AssertionError("no ARM call")
+            apim, "get_app_insights_logger", side_effect=AssertionError("no ARM call")
         ):
             for malformed in (
                 "",
@@ -542,7 +779,7 @@ class TokenMetricsTests(unittest.TestCase):
                 "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Insights/components/appi",
             ):
                 self.assertIsNone(
-                    apim._app_insights_for_apim_resource_id(malformed), malformed
+                    apim._app_insights_for_apim_resource_id(malformed, "logger"), malformed
                 )
 
     def test_query_app_insights_token_metrics_returns_empty_list_without_rows(self):

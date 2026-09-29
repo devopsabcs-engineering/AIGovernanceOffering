@@ -1,0 +1,22 @@
+{
+  "Name": "AIGov Preflight Reader",
+  "IsCustom": true,
+  "Description": "Lab preflight: read soft-deleted resources, model availability, quota usage, SKUs, and provider registration. Read-only.",
+  "Actions": [
+    "Microsoft.ApiManagement/deletedservices/read",
+    "Microsoft.ApiManagement/locations/deletedservices/read",
+    "Microsoft.CognitiveServices/deletedAccounts/read",
+    "Microsoft.CognitiveServices/locations/resourceGroups/deletedAccounts/read",
+    "Microsoft.CognitiveServices/locations/usages/read",
+    "Microsoft.CognitiveServices/locations/models/read",
+    "Microsoft.CognitiveServices/skus/read",
+    "Microsoft.OperationalInsights/deletedWorkspaces/read",
+    "Microsoft.Resources/subscriptions/providers/read"
+  ],
+  "NotActions": [],
+  "DataActions": [],
+  "NotDataActions": [],
+  "AssignableScopes": [
+    "/subscriptions/{subscriptionId}"
+  ]
+}

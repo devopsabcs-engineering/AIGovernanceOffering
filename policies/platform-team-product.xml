@@ -1,0 +1,30 @@
+<policies>
+  <inbound>
+    <!--
+      Per-team product policy template (owned by infra/modules/platform-api.bicep).
+      Bicep replaces the tokens-per-minute and token-quota placeholders for each team
+      product. The counter is keyed on the caller's APIM subscription, so each team
+      subscription has its own rate limit and daily quota.
+    -->
+    <base />
+    <llm-token-limit
+        counter-key="@(context.Subscription.Id)"
+        tokens-per-minute="__TOKENS_PER_MINUTE__"
+        token-quota="__DAILY_TOKEN_QUOTA__"
+        token-quota-period="Daily"
+        estimate-prompt-tokens="false"
+        retry-after-header-name="Retry-After"
+        tokens-consumed-header-name="tokens-consumed"
+        remaining-tokens-header-name="remaining-tokens"
+        remaining-quota-tokens-header-name="remaining-quota-tokens" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

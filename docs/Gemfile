@@ -1,0 +1,5 @@
+source "https://rubygems.org"
+gem "github-pages", group: :jekyll_plugins
+gem "webrick", "~> 1.8"
+# just-the-docs declares rake as a runtime dependency, which remote-theme loads.
+gem "rake", "~> 13.0"

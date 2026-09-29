@@ -478,3 +478,24 @@ Minor findings (5; no DR/DD entries added):
 * WI-07: Add LICENSE after owner selects a license (low)
   * Source: DR-05
   * Dependency: owner decision
+* WI-08: Strip client subscription key in policies/demo4-resilient-pool.xml with a test (medium)
+  * Source: Phase 8 review; Demo 1-3 and platform policies already strip it
+  * Dependency: live Demo 4 run to confirm mock-auth probe and routing still pass
+* WI-09: Drift test tying docs/_data/labs.yml image prefixes and doc evidence notes to render_evidence.py lab IDs and PNG names (low)
+  * Source: Phase 8 found and fixed this drift manually
+  * Dependency: none
+* WI-10: Pin Bicep CLI version in ci.yml and lab-session cloud job (low)
+  * Source: Phase 5
+  * Dependency: approved Bicep version
+* WI-11: Decide on docs/Gemfile.lock (commit with x86_64-linux platform or ignore) (low)
+  * Source: Phase 8
+  * Dependency: owner decision
+* WI-12: Confirm on first push that ubuntu runners allow `sudo unshare --net` + `setpriv` for the render job and shellcheck passes in actionlint (low)
+  * Source: Phase 5
+  * Dependency: first CI run
+
+## Implementation Execution Notes
+
+* 2026-09-29: Phases 1-5 and local Phase 8 (Steps 8.1-8.2) completed; Phases 6-7 not started pending explicit user approval. All gates G1-G9 remain OPEN.
+* Phase 6 prerequisite decisions: approved model tuple and residency (AIGOV_CHAT_*, AIGOV_AI_LOCATION, AIGOV_CONTENT_SAFETY_LOCATION, AIGOV_ALLOW_GLOBAL_PROCESSING), price snapshot file and AIGOV_PRICE_SNAPSHOT, session caps (defaults 207 attempts, ~16.3k tokens, USD 2.00), environment reviewers, recovery/purge operator, publisher email.
+* Live verifications carried from implementation: custom role action names, CustomMetricsOptedInType readback API version, logger identityClientId readback, dropping largeLanguageModel on diagnostics, mock-auth 401, stream-intervention provenance, token metric namespace dimension, App Insights auto-created smart detection resources.

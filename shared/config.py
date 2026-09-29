@@ -3,18 +3,24 @@
 Precedence: environment variables -> `.env` file -> interactive `input()`
 prompt. Any value collected interactively is persisted back to `.env` so
 subsequent runs are non-interactive. Secrets are never printed.
+
+Headless mode (``AIGOV_HEADLESS=1``) never prompts: a missing value raises
+:class:`ConfigError`, and a key whose inherited environment value differs
+from `.env` raises instead of silently winning. ``DEMO_RUN`` is `.env`-owned
+in headless mode, so any inherited ``DEMO_RUN`` is treated as a conflict.
 """
 
 from __future__ import annotations
 
 import os
+import time
 import uuid
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Dict, Optional
 from urllib.parse import urlparse
 
-from dotenv import load_dotenv, set_key
+from dotenv import dotenv_values, set_key
 
 from .auth import get_current_subscription_id, mask_secret
 
@@ -38,6 +44,37 @@ DEFAULT_CONTENT_SAFETY_THRESHOLD = "4"
 #                /chat/completions?api-version=...
 API_STYLES = ("v1", "classic")
 
+HEADLESS_ENV_KEY = "AIGOV_HEADLESS"
+LOCAL_AUTH_LOGGER_ENV_KEY = "DEMO2_ALLOW_LOCAL_AUTH_LOGGER"
+# Keys that only the `.env` file may supply in headless mode.
+FILE_OWNED_KEYS = frozenset({"DEMO_RUN"})
+_TRUE_VALUES = {"1", "true", "yes"}
+
+
+class ConfigError(ValueError):
+    """Raised when configuration is missing or conflicting (never includes values)."""
+
+
+def is_headless() -> bool:
+    """Return True when running unattended (``AIGOV_HEADLESS=1``)."""
+    return os.environ.get(HEADLESS_ENV_KEY, "").strip().lower() in _TRUE_VALUES
+
+
+def local_auth_logger_allowed() -> bool:
+    """Return True only when a connection-string-only logger is explicitly allowed.
+
+    The flag is an interactive escape hatch for Application Insights resources
+    that still accept local authentication. Headless runs must use managed
+    identity ingestion, so the flag is rejected there.
+    """
+    allowed = os.environ.get(LOCAL_AUTH_LOGGER_ENV_KEY, "").strip().lower() in _TRUE_VALUES
+    if allowed and is_headless():
+        raise ConfigError(
+            f"{LOCAL_AUTH_LOGGER_ENV_KEY} is not permitted in headless mode; "
+            "use managed-identity logger credentials."
+        )
+    return allowed
+
 
 @dataclass
 class WorkshopConfig:
@@ -52,6 +89,7 @@ class WorkshopConfig:
     app_insights_name: Optional[str] = None
     app_insights_resource_id: Optional[str] = None
     app_insights_connection_string: Optional[str] = None
+    apim_identity_client_id: Optional[str] = None
     content_safety_endpoint: str = ""
     content_safety_key: Optional[str] = None
     content_safety_blocklist_id: Optional[str] = None
@@ -88,6 +126,7 @@ _ENV_KEYS = {
     "app_insights_name": "APP_INSIGHTS_NAME",
     "app_insights_resource_id": "APP_INSIGHTS_RESOURCE_ID",
     "app_insights_connection_string": "APP_INSIGHTS_CONNECTION_STRING",
+    "apim_identity_client_id": "APIM_IDENTITY_CLIENT_ID",
     "content_safety_endpoint": "CONTENT_SAFETY_ENDPOINT",
     "content_safety_key": "CONTENT_SAFETY_KEY",
     "content_safety_blocklist_id": "CONTENT_SAFETY_BLOCKLIST_ID",
@@ -105,6 +144,10 @@ _ENV_KEYS = {
 }
 
 
+# Environment keys this module copied from `.env` (as opposed to inherited ones).
+_MANAGED_ENV_KEYS: set = set()
+
+
 def _ensure_env_file() -> None:
     if not ENV_PATH.exists():
         ENV_PATH.touch()
@@ -112,10 +155,66 @@ def _ensure_env_file() -> None:
 
 def _persist(key: str, value: str) -> None:
     _ensure_env_file()
-    set_key(str(ENV_PATH), _ENV_KEYS[key], value, quote_mode="never")
+    # Windows: a scanner can hold .env briefly, making set_key's os.replace fail transiently.
+    for attempt in range(20):
+        try:
+            set_key(str(ENV_PATH), _ENV_KEYS[key], value, quote_mode="never")
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.01 * (attempt + 1))
+
+
+def _check_env_conflicts(file_values: Dict[str, str]) -> None:
+    """Raise if inherited environment values disagree with `.env` (names only)."""
+    conflicts = []
+    for key, file_value in file_values.items():
+        if key not in os.environ or key in _MANAGED_ENV_KEYS:
+            continue
+        if key in FILE_OWNED_KEYS or os.environ[key] != file_value:
+            conflicts.append(key)
+    for key in FILE_OWNED_KEYS:
+        if key in os.environ and key not in _MANAGED_ENV_KEYS and key not in file_values:
+            conflicts.append(key)
+    if conflicts:
+        raise ConfigError(
+            "Inherited environment variables conflict with .env in headless mode: "
+            f"{', '.join(sorted(set(conflicts)))}. Unset them or make .env the single source."
+        )
+
+
+def load_env_file() -> Dict[str, str]:
+    """Copy `.env` values into ``os.environ`` without overriding inherited values.
+
+    Keys this module loaded earlier are refreshed from the file so values
+    persisted during the session (for example a reset ``DEMO_RUN``) are seen
+    by the next :func:`load_config`.
+    """
+    if not ENV_PATH.exists():
+        if is_headless():
+            _check_env_conflicts({})
+        return {}
+    file_values = {
+        key: ("" if value is None else value)
+        for key, value in dotenv_values(ENV_PATH).items()
+        if key
+    }
+    if is_headless():
+        _check_env_conflicts(file_values)
+    for key, value in file_values.items():
+        if key not in os.environ or key in _MANAGED_ENV_KEYS:
+            os.environ[key] = value
+            _MANAGED_ENV_KEYS.add(key)
+    return file_values
 
 
 def _prompt(field_name: str, label: str, default: str = "", secret: bool = False) -> str:
+    if is_headless():
+        raise ConfigError(
+            f"Missing required configuration key {_ENV_KEYS.get(field_name, field_name)} "
+            "(headless mode never prompts; write it to .env)."
+        )
     prompt_default = f" [{default}]" if default else ""
     if secret:
         import getpass
@@ -132,11 +231,13 @@ def load_config(interactive: bool = True) -> WorkshopConfig:
 
     Values obtained interactively are persisted to `.env` for future runs.
     """
-    if ENV_PATH.exists():
-        load_dotenv(dotenv_path=ENV_PATH, override=False)
+    headless = is_headless()
+    load_env_file()
 
     cfg = WorkshopConfig()
-    cfg.subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID") or get_current_subscription_id()
+    cfg.subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID") or (
+        None if headless else get_current_subscription_id()
+    )
     cfg.resource_group = os.environ.get("APIM_RESOURCE_GROUP", "")
     cfg.apim_name = os.environ.get("APIM_NAME", "")
     cfg.aoai_endpoint = os.environ.get("AOAI_ENDPOINT", "")
@@ -150,6 +251,9 @@ def load_config(interactive: bool = True) -> WorkshopConfig:
     cfg.app_insights_resource_id = os.environ.get("APP_INSIGHTS_RESOURCE_ID") or None
     cfg.app_insights_connection_string = (
         os.environ.get("APP_INSIGHTS_CONNECTION_STRING") or None
+    )
+    cfg.apim_identity_client_id = (
+        os.environ.get("APIM_IDENTITY_CLIENT_ID", "").strip() or None
     )
     cfg.content_safety_endpoint = os.environ.get("CONTENT_SAFETY_ENDPOINT", "")
     cfg.content_safety_key = os.environ.get("CONTENT_SAFETY_KEY") or None
@@ -188,10 +292,26 @@ def load_config(interactive: bool = True) -> WorkshopConfig:
     cfg.demo4_payg_deployment = (
         os.environ.get("DEMO4_PAYG_DEPLOYMENT", "") or cfg.demo4_payg_deployment
     )
-    cfg.demo_run = os.environ.get("DEMO_RUN", "") or cfg.demo_run
+    demo_run_from_env = os.environ.get("DEMO_RUN", "")
+    cfg.demo_run = demo_run_from_env or cfg.demo_run
 
     if not interactive:
         return cfg
+
+    if headless:
+        missing = [
+            env_key
+            for env_key, value in (
+                ("AZURE_SUBSCRIPTION_ID", cfg.subscription_id),
+                ("DEMO_RUN", demo_run_from_env),
+            )
+            if not value
+        ]
+        if missing:
+            raise ConfigError(
+                f"Missing required configuration keys in .env: {', '.join(missing)} "
+                "(headless mode never prompts)."
+            )
 
     if not cfg.resource_group:
         cfg.resource_group = _prompt("resource_group", "Resource group containing the APIM instance")
@@ -236,7 +356,7 @@ def load_config(interactive: bool = True) -> WorkshopConfig:
 
     if cfg.subscription_id:
         _persist("subscription_id", cfg.subscription_id)
-    _persist("demo_run", cfg.demo_run)
+    persist_demo_run(cfg.demo_run)
 
     return cfg
 
@@ -254,8 +374,14 @@ def _dotenv_keys() -> set:
 
 
 def persist_demo_run(demo_run: str) -> None:
-    """Persist a (regenerated) DEMO_RUN value, used by the demo reset cell."""
+    """Persist a (regenerated) DEMO_RUN value, used by the demo reset cell.
+
+    The process environment is updated too, so a later :func:`load_config`
+    in the same kernel sees the reset value instead of the stale one.
+    """
     _persist("demo_run", demo_run)
+    os.environ["DEMO_RUN"] = demo_run
+    _MANAGED_ENV_KEYS.add("DEMO_RUN")
 
 
 def validate_config(cfg: WorkshopConfig) -> None:

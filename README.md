@@ -118,27 +118,132 @@ in without changing the `shared/` helpers:
 `Scenario` -> `Isolation` -> `Configure (policy apply)` -> `Baseline` ->
 `Demonstrate` -> `Observe` -> `Reset / Cleanup` -> `Talk track`
 
+## Lab site
+
+The `docs/` folder is a bilingual Jekyll site (Just the Docs theme) that walks
+through eight labs in English and French. Start at
+[docs/index.md](docs/index.md) for English or
+[docs/fr/index.md](docs/fr/index.md) for French. Once GitHub Pages publishes
+the `docs/` folder, the site is served at
+<https://devopsabcs-engineering.github.io/AIGovernanceOffering/>.
+
+| Lab | Topic | Evidence owner |
+| --- | ----- | -------------- |
+| 00 | Deploy the lab environment | Session deployment |
+| 01 | Setup and validation | `00-setup-and-validation.ipynb` |
+| 02 | Token limits and quotas | `demo1-token-limits.ipynb` |
+| 03 | Token metrics | `demo2-token-metrics.ipynb` |
+| 04 | Content safety | `demo3-content-safety.ipynb` |
+| 05 | Mock resilient backend pool | `demo4-resilient-pool.ipynb` |
+| 06 | Estimated model-token showback | Bounded traffic and report |
+| 07 | Teardown and residual cost exposure | Recovery inventory |
+
+The canonical page map lives in [docs/_data/labs.yml](docs/_data/labs.yml).
+Every English page has a French mirror with the same slug, and both carry the
+same technical limits: Basic v2 is a conditional public-endpoint choice, the
+resilient pool uses mock members rather than real regions, content safety
+results can be inconclusive, showback is an estimate rather than a billed
+chargeback, and teardown is a dry run by default with human-only purge.
+Evidence images are published only after a maintainer reviews sanitized
+session evidence; until then each lab states that evidence is pending review.
+
+To preview the site locally with Ruby and Bundler:
+
+```bash
+cd docs
+bundle install
+bundle exec jekyll serve --baseurl /AIGovernanceOffering
+```
+
+## Automated environment
+
+The interactive path above uses an APIM instance you already own. The
+automated path provisions a dedicated, bounded environment and runs the same
+notebooks headlessly:
+
+- An administrator runs `scripts/bootstrap-lab.ps1` once (a dry run unless
+  `-Execute` is passed); no workflow ever runs it. It creates the lab
+  resource group, the identity resource group with the APIM user-assigned
+  identity, custom roles, the federated deployment and runtime identities,
+  and the protected `lab` GitHub environment.
+- The bootstrap also sets the identity, subscription, location, and name
+  suffix repository variables. A maintainer sets the remaining approved
+  values before the first session: `AIGOV_GENERATION`, the model tuple and
+  regions listed in [infra/README.md](infra/README.md),
+  `AIGOV_PUBLISHER_EMAIL`, and `AIGOV_PRICE_SNAPSHOT` (a price snapshot file
+  under `scripts/prices/`, required by `full-session`, `deploy-only`, and
+  `run-existing`).
+- `infra/main.bicep` deploys one APIM Basic v2 instance, one approved model
+  deployment, Azure AI Content Safety, Log Analytics, and workspace-based
+  Application Insights with local authentication disabled. The model,
+  version, SKU, region, and capacity have no defaults.
+- [`.github/workflows/lab-session.yml`](.github/workflows/lab-session.yml)
+  is a manual, reviewer-approved workflow with the modes `dry-run`,
+  `full-session`, `deploy-only`, `run-existing`, `report-only`, and
+  `lock-test`. It writes a manifest record before any mutation, checks
+  readiness, runs the five notebooks within a session budget, generates
+  bounded team traffic, reports estimated model-token showback, uploads
+  sanitized evidence, and cleans up only resources recorded by its own
+  manifest according to the mode.
+- [`.github/workflows/teardown.yml`](.github/workflows/teardown.yml) is a
+  manual workflow that runs as a dry run unless `execute` is set, keeps the
+  resource group and bootstrap-owned resources, and reports residual
+  exposure, including soft-deleted resources. It never purges; purge is a
+  human-only `scripts/lab_session.py purge --execute` operation with typed
+  confirmation of every name.
+
+LLM message logging stays off in every mode, so no prompts or completions are
+recorded in telemetry. See
+[Lab 00](docs/labs/lab-00-environment.md) and
+[Lab 07](docs/labs/lab-07-teardown.md) for the full walkthrough.
+
 ## Repository structure
 
 ```
 README.md                      # this file
 requirements.txt               # Python dependencies
+requirements-ci.txt            # automation and CI dependencies (papermill, nbformat, matplotlib, PyYAML)
 .env.example                   # config template (copy to .env, or let notebooks prompt you)
 .gitignore
+.github/workflows/
+  ci.yml                       # credential-free unit tests, Bicep, actionlint, site build, PSScriptAnalyzer
+  lab-session.yml              # protected manual lab session (dry-run by default)
+  teardown.yml                 # protected manual, manifest-scoped teardown (dry run by default)
+config/
+  session-envelope.json        # inventory of every notebook model and safety call site
+infra/
+  main.bicep, main.bicepparam  # resource-group-scoped Basic v2 lab environment
+  modules/                     # monitoring, ai, apim, platform-api
+scripts/
+  bootstrap-lab.ps1            # administrator bootstrap (dry run unless -Execute)
+  lab_session.py               # session orchestrator (deploy, readiness, notebooks, cleanup, purge)
+  generate_traffic.py          # bounded team traffic for showback
+  showback_report.py           # estimated model-token showback
+  check_notebook_outputs.py    # notebook completion and objective checker
+  render_evidence.py           # evidence sanitizer and credential-free renderer
+tests/                         # unit and contract tests (python -m unittest discover -s tests -t .)
 docs/
   ai-governance-flows.svg      # animated end-to-end flow diagram for all four demos
+  _config.yml                  # Jekyll + Just the Docs site configuration
+  _data/labs.yml               # canonical EN/FR lab page map
+  index.md, labs/              # English lab site
+  fr/                          # French lab site mirroring docs/ slugs
 shared/
   config.py                    # load/prompt config, persist to .env, validate
   apim.py                      # idempotent APIM control-plane helpers (ARM REST)
   auth.py                      # AzureCliCredential / DefaultAzureCredential helpers + ARM token
   display.py                   # tables, headers, banners, charts
   fixtures.py                  # versioned Demo 3 content-safety test-matrix fixtures
+  results.py                   # objective result files and response classifiers
+  budget.py                    # session-wide request, token, and cost guard
 policies/
   demo1-token-limit.xml        # API-scope policy for Demo 1
   demo2-emit-token-metric.xml  # API-scope policy for Demo 2
   demo3-content-safety.xml     # API-scope policy for Demo 3 (inbound + outbound)
   demo4-resilient-pool.xml     # API-scope policy for Demo 4 pool routing
   demo4-mock-origin.xml        # APIM-hosted observable mock origin for Demo 4
+  platform-ai-gateway.xml      # automated environment: shared /ai-gateway API policy
+  platform-team-product.xml    # automated environment: per-team token-limit policy
 notebooks/
   00-setup-and-validation.ipynb  # shared prerequisite check
   demo1-token-limits.ipynb       # Demo 1 (complete)
@@ -201,14 +306,13 @@ resources on that existing instance:
 Before sending traffic, the notebook displays the required preflight checks
 out loud:
 
-- **Application Insights connected**: APIM has an Application Insights logger
-  or the notebook has enough `APP_INSIGHTS_*` values to create one.
-- **LLM API logging enabled**: the Demo 2 API diagnostic has LLM /
-  large-language-model logging settings.
-- **Support custom metrics enabled**: the Demo 2 API diagnostic has
-  `metrics: true`. Without it the token metrics emitted by the policy are
-  silently discarded. The Configure section always sets it, so re-run that
-  section if the verify step reports it as disabled.
+- **Application Insights connected**: APIM has the Demo 2 logger
+  (`demo2-application-insights`) or the notebook has enough `APP_INSIGHTS_*`
+  values to create it. Demo 2 never reuses another logger.
+- **LLM message capture disabled**: the Demo 2 API diagnostic emits custom
+  metrics only (`metrics: true`); prompts, completions, and HTTP bodies are
+  never logged. Without `metrics: true` the token metrics emitted by the
+  policy are silently discarded, so the Configure section always sets it.
 - **Custom metrics with dimensions enabled**: App Insights **Enable alerting
   on custom metric dimensions** / usage-and-estimated-costs setting. If ARM
   cannot detect the setting, the notebook shows a clear manual portal

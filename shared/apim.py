@@ -9,6 +9,7 @@ workshop demos, not just Demo 1.
 from __future__ import annotations
 
 import json as _json
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
@@ -16,28 +17,84 @@ from typing import Any, Dict, Iterable, List, Optional
 import requests
 
 from .auth import get_arm_token
+from .config import ConfigError, is_headless
 
 ARM_BASE = "https://management.azure.com"
 API_VERSION = "2024-06-01-preview"
 APIM_PREVIEW_API_VERSION = "2025-09-01-preview"
+COGNITIVE_SERVICES_RESOURCE = "https://cognitiveservices.azure.com"
+
+# Bicep-owned platform logger; notebook helpers must never write or bind it.
+PLATFORM_LOGGER_ID = "apimlogger"
+SYSTEM_ASSIGNED_IDENTITY = "SystemAssigned"
 
 # How long to wait for APIM's async provisioning (e.g. a service that is
 # still "Updating") before giving up.
 _POLL_TIMEOUT_SECONDS = 300
 _POLL_INTERVAL_SECONDS = 5
 
+_ERROR_BODY_LIMIT = 500
+_REDACTED = "***REDACTED***"
+_SECRET_FIELD_NAMES = (
+    "primaryKey", "secondaryKey", "connectionString", "key", "value",
+    "Ocp-Apim-Subscription-Key", "api-key", "Authorization", "instrumentationKey",
+    "access_token", "accessToken", "token", "password", "secret", "clientSecret",
+)
+_SECRET_NAMES_PATTERN = "|".join(re.escape(name) for name in _SECRET_FIELD_NAMES)
+_JSON_SECRET_RE = re.compile(
+    r'("(?:' + _SECRET_NAMES_PATTERN + r')"\s*:\s*)("(?:[^"\\]|\\.)*"|[^,}\]\s]+)',
+    re.IGNORECASE,
+)
+_HEADER_SECRET_RE = re.compile(
+    r"((?:Ocp-Apim-Subscription-Key|api-key|Authorization)\s*[:=]\s*)([^\s,;&\"']+(?:\s+[^\s,;&\"']+)?)",
+    re.IGNORECASE,
+)
+_QUERY_SECRET_RE = re.compile(
+    r"((?:subscription-key|api-key|sig|code|access_token)=)([^&\s\"']+)", re.IGNORECASE
+)
+_CONNECTION_STRING_RE = re.compile(
+    r"((?:InstrumentationKey|SharedAccessKey|AccountKey)=)([^;\s\"']+)", re.IGNORECASE
+)
+_BEARER_RE = re.compile(r"(Bearer\s+)[A-Za-z0-9\-_.~+/=]+", re.IGNORECASE)
+_GUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def redact_secrets(text: Optional[str]) -> str:
+    """Mask values of known secret fields, headers, query keys, and bearer tokens."""
+    if not text:
+        return ""
+    text = _JSON_SECRET_RE.sub(lambda m: f'{m.group(1)}"{_REDACTED}"', text)
+    text = _HEADER_SECRET_RE.sub(lambda m: f"{m.group(1)}{_REDACTED}", text)
+    text = _QUERY_SECRET_RE.sub(lambda m: f"{m.group(1)}{_REDACTED}", text)
+    text = _CONNECTION_STRING_RE.sub(lambda m: f"{m.group(1)}{_REDACTED}", text)
+    return _BEARER_RE.sub(lambda m: f"{m.group(1)}{_REDACTED}", text)
+
+
+def sanitize_error_body(text: Optional[str], limit: int = _ERROR_BODY_LIMIT) -> str:
+    """Redact secrets, then truncate, so error text is safe to print or log."""
+    cleaned = redact_secrets(text)
+    if len(cleaned) > limit:
+        cleaned = cleaned[:limit] + f"...[truncated {len(cleaned) - limit} chars]"
+    return cleaned
+
 
 class ApimError(RuntimeError):
-    """Raised when an ARM call against APIM fails, with full context."""
+    """Raised when an ARM call against APIM fails; body is redacted and truncated."""
 
     def __init__(self, method: str, url: str, response: requests.Response):
         self.method = method
-        self.url = url
+        self.url = redact_secrets(str(url))
         self.status_code = response.status_code
-        self.body = response.text
+        self.body = sanitize_error_body(getattr(response, "text", ""))
         super().__init__(
-            f"{method} {url} failed with {response.status_code}: {response.text}"
+            f"{method} {self.url} failed with {response.status_code}: {self.body}"
         )
+
+
+class PrivacyConfigurationError(RuntimeError):
+    """Raised when a diagnostic readback shows LLM message or body capture."""
 
 
 def _headers() -> Dict[str, str]:
@@ -77,10 +134,6 @@ def _request(
     if response.status_code not in ok_statuses:
         raise ApimError(method, response.url, response)
     return response
-
-
-def _resource_name(resource_id: str) -> str:
-    return resource_id.rstrip("/").split("/")[-1]
 
 
 def _portal_url(resource_id: str, blade: str = "overview") -> str:
@@ -199,7 +252,7 @@ def ensure_backend(
     backend entity itself rather than via a policy ``set-header`` (this is
     how the ``llm-content-safety`` policy authenticates to its Content Safety
     ``backend-id``, since it calls the backend directly). Pass e.g.
-    ``{"managedIdentity": {"resource": "https://cognitiveservices.azure.com"}}``
+    :func:`managed_identity_backend_credentials` (system- or user-assigned)
     or ``{"header": {"Ocp-Apim-Subscription-Key": ["<key>"]}}``.
     """
     url = f"{_service_scope(subscription_id, resource_group, apim_name)}/backends/{backend_id}"
@@ -218,6 +271,69 @@ def ensure_backend(
     response = _request("PUT", url, json_body=body)
     _wait_for_completion(response)
     return _json_body(response)
+
+
+def _validate_identity_client_id(client_id: str) -> str:
+    client_id = client_id.strip()
+    if not _GUID_RE.match(client_id):
+        raise ValueError(
+            "APIM_IDENTITY_CLIENT_ID must be the user-assigned identity client ID (a GUID)."
+        )
+    return client_id
+
+
+def managed_identity_backend_credentials(
+    client_id: Optional[str] = None,
+    resource: str = COGNITIVE_SERVICES_RESOURCE,
+) -> Dict[str, Any]:
+    """Backend ``credentials`` for APIM managed identity (user-assigned when ``client_id`` is set)."""
+    managed_identity: Dict[str, Any] = {"resource": resource}
+    if client_id and client_id.strip():
+        managed_identity["clientId"] = _validate_identity_client_id(client_id)
+    return {"managedIdentity": managed_identity}
+
+
+_MI_ELEMENT_RE = re.compile(r"<authentication-managed-identity\b[^>]*?/?>", re.DOTALL)
+_CLIENT_ID_ATTR_RE = re.compile(r"\s+client-id\s*=\s*(\"[^\"]*\"|'[^']*')")
+
+
+def apply_identity_client_id(policy_xml: str, client_id: Optional[str]) -> str:
+    """Set ``client-id`` on every ``authentication-managed-identity`` element.
+
+    Returns the policy unchanged when ``client_id`` is empty so the APIM
+    system-assigned identity keeps working. Idempotent: an existing
+    ``client-id`` attribute is replaced rather than duplicated.
+    """
+    if not client_id or not client_id.strip():
+        return policy_xml
+    client_id = _validate_identity_client_id(client_id)
+
+    def _inject(match: "re.Match[str]") -> str:
+        element = _CLIENT_ID_ATTR_RE.sub("", match.group(0))
+        name = "<authentication-managed-identity"
+        return f'{name} client-id="{client_id}"{element[len(name):]}'
+
+    return _MI_ELEMENT_RE.sub(_inject, policy_xml)
+
+
+def get_backend(
+    subscription_id: str,
+    resource_group: str,
+    apim_name: str,
+    backend_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Fetch a backend, returning None if it does not exist."""
+    url = f"{_service_scope(subscription_id, resource_group, apim_name)}/backends/{backend_id}"
+    response = _request("GET", url)
+    if response.status_code == 404:
+        return None
+    return _json_body(response)
+
+
+def backend_credential_header_names(backend: Optional[Dict[str, Any]]) -> List[str]:
+    """Return the header names (never values) configured as backend credentials."""
+    credentials = ((backend or {}).get("properties") or {}).get("credentials") or {}
+    return sorted((credentials.get("header") or {}).keys())
 
 
 def ensure_backend_pool(
@@ -423,6 +539,18 @@ def get_logger(
     return _json_body(response)
 
 
+def _reject_platform_logger(logger_id: str) -> None:
+    if (logger_id or "").strip().lower() == PLATFORM_LOGGER_ID:
+        raise ValueError(
+            f"Logger '{PLATFORM_LOGGER_ID}' is platform-owned (Bicep); notebook helpers "
+            "must use their own explicit logger ID."
+        )
+
+
+def _normalize_resource_id(resource_id: Optional[str]) -> str:
+    return (resource_id or "").strip().rstrip("/").lower()
+
+
 def ensure_logger(
     subscription_id: str,
     resource_group: str,
@@ -431,56 +559,95 @@ def ensure_logger(
     *,
     app_insights_connection_string: str,
     app_insights_resource_id: Optional[str] = None,
+    identity_client_id: Optional[str] = None,
+    allow_local_auth: bool = False,
     description: str = "",
 ) -> Dict[str, Any]:
-    """Create or update an APIM Application Insights logger.
+    """Create or update an APIM Application Insights logger using managed-identity ingestion.
 
-    Provide the required Application Insights connection string, optionally with
-    the resource id as the Azure resource backing the logger. APIM requires
-    non-empty credentials on Application Insights loggers, even when
-    ``resourceId`` is supplied, so callers that have only a resource id must set
-    ``APP_INSIGHTS_CONNECTION_STRING`` before calling this helper.
+    Credentials follow the documented shape
+    ``{"connectionString": ..., "identityClientId": ...}``: the user-assigned
+    identity client ID when ``identity_client_id`` is set, otherwise
+    ``"SystemAssigned"``. The chosen APIM identity needs the Monitoring Metrics
+    Publisher role on the Application Insights component. A connection-string-only
+    (local authentication) logger is written only when ``allow_local_auth`` is
+    explicitly True, which headless mode rejects. The platform logger
+    ``apimlogger`` is never written by this helper.
     """
+    _reject_platform_logger(logger_id)
     if not (app_insights_connection_string or "").strip():
         raise ValueError(
             "APIM requires credentials on an Application Insights logger. "
             "Set APP_INSIGHTS_CONNECTION_STRING from the Application Insights "
             "resource's Overview blade before calling ensure_logger."
         )
+    if allow_local_auth and is_headless():
+        raise ConfigError(
+            "A connection-string-only (local authentication) logger is not permitted "
+            "in headless mode."
+        )
     app_insights_resource_id = (app_insights_resource_id or "").strip()
+
+    credentials: Dict[str, Any] = {"connectionString": app_insights_connection_string}
+    if not allow_local_auth:
+        credentials["identityClientId"] = (
+            _validate_identity_client_id(identity_client_id)
+            if identity_client_id and identity_client_id.strip()
+            else SYSTEM_ASSIGNED_IDENTITY
+        )
 
     url = f"{_service_scope(subscription_id, resource_group, apim_name)}/loggers/{logger_id}"
     properties: Dict[str, Any] = {
         "loggerType": "applicationInsights",
         "description": description or logger_id,
         "isBuffered": True,
+        "credentials": credentials,
     }
     if app_insights_resource_id:
         properties["resourceId"] = app_insights_resource_id
-    if app_insights_connection_string:
-        properties["credentials"] = {"connectionString": app_insights_connection_string}
 
     response = _request("PUT", url, json_body={"properties": properties})
     _wait_for_completion(response)
     return _json_body(response)
 
 
-def get_app_insights_for_apim(
+def get_app_insights_logger(
     subscription_id: str,
     resource_group: str,
     apim_name: str,
+    logger_id: str,
+    expected_app_insights_resource_id: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Return the first APIM Application Insights logger found, if any."""
-    for logger in list_loggers(subscription_id, resource_group, apim_name):
-        props = logger.get("properties", {})
-        if props.get("loggerType") == "applicationInsights":
-            return {
-                "logger_id": _resource_name(logger.get("name", "") or logger.get("id", "")),
-                "logger_resource_id": logger.get("id"),
-                "app_insights_resource_id": props.get("resourceId"),
-                "description": props.get("description", ""),
-            }
-    return None
+    """Look up one Application Insights logger by explicit ID.
+
+    Returns None only when the named logger does not exist. Raises when it
+    exists but is not an Application Insights logger, or when it points to a
+    different Application Insights resource than
+    ``expected_app_insights_resource_id``. There is no "first logger" fallback.
+    """
+    logger = get_logger(subscription_id, resource_group, apim_name, logger_id)
+    if logger is None:
+        return None
+    props = logger.get("properties", {}) or {}
+    if props.get("loggerType") != "applicationInsights":
+        raise ValueError(f"Logger '{logger_id}' is not an Application Insights logger.")
+    actual_resource_id = props.get("resourceId")
+    if expected_app_insights_resource_id and (
+        _normalize_resource_id(actual_resource_id)
+        != _normalize_resource_id(expected_app_insights_resource_id)
+    ):
+        raise ValueError(
+            f"Logger '{logger_id}' points to a different Application Insights resource "
+            "than APP_INSIGHTS_RESOURCE_ID."
+        )
+    credentials = props.get("credentials") or {}
+    return {
+        "logger_id": logger_id,
+        "logger_resource_id": logger.get("id"),
+        "app_insights_resource_id": actual_resource_id,
+        "description": props.get("description", ""),
+        "identity_client_id": credentials.get("identityClientId"),
+    }
 
 
 def ensure_api_diagnostic(
@@ -490,13 +657,17 @@ def ensure_api_diagnostic(
     api_id: str,
     logger_id: str,
 ) -> Dict[str, Any]:
-    """Enable API diagnostics with supported LLM settings when available.
+    """Enable API-scope Application Insights diagnostics for custom metrics only.
 
-    In ``2025-09-01-preview``, ``largeLanguageModel.logs`` is invalid; the
-    LLM contract supports only ``requests`` and ``responses``. If a preview
-    contract rejects the LLM block, this helper falls back to plain
-    Application Insights diagnostics.
+    The ``largeLanguageModel`` block is omitted so no LLM request or response
+    messages are captured; the ``2025-09-01-preview`` schema offers only
+    ``messages: "all"``. The published schema also lists
+    ``largeLanguageModel.logs`` (``enabled``/``disabled``), but its runtime
+    acceptance is not verified here, so it is not sent. HTTP body logging stays
+    at 0 bytes and no headers are logged. Verify the result with
+    :func:`assert_no_llm_message_capture` on a readback.
     """
+    _reject_platform_logger(logger_id)
     diagnostic_id = "applicationinsights"
     logger_resource_id = (
         f"{_service_scope(subscription_id, resource_group, apim_name)}/loggers/{logger_id}"
@@ -505,7 +676,8 @@ def ensure_api_diagnostic(
         f"{_service_scope(subscription_id, resource_group, apim_name)}"
         f"/apis/{api_id}/diagnostics/{diagnostic_id}"
     )
-    base_props = {
+    no_capture = {"headers": [], "body": {"bytes": 0}}
+    properties = {
         "alwaysLog": "allErrors",
         "loggerId": logger_resource_id,
         # "Support custom metrics" in the portal. Without it emit-metric and
@@ -514,32 +686,53 @@ def ensure_api_diagnostic(
         # every call or the setting reverts to its default of false.
         "metrics": True,
         "sampling": {"samplingType": "fixed", "percentage": 100},
-        "frontend": {"request": {"headers": []}, "response": {"headers": []}},
-        "backend": {"request": {"headers": []}, "response": {"headers": []}},
+        "frontend": {"request": dict(no_capture), "response": dict(no_capture)},
+        "backend": {"request": dict(no_capture), "response": dict(no_capture)},
     }
-    llm_props = dict(base_props)
-    llm_props["largeLanguageModel"] = {
-        "requests": {"messages": "all", "maxSizeInBytes": 8192},
-        "responses": {"messages": "all", "maxSizeInBytes": 8192},
-    }
-    try:
-        response = _request(
-            "PUT",
-            url,
-            params={"api-version": APIM_PREVIEW_API_VERSION},
-            json_body={"properties": llm_props},
-        )
-    except ApimError as exc:
-        if exc.status_code != 400 or "largelanguagemodel" not in (exc.body or "").lower():
-            raise
-        response = _request(
-            "PUT",
-            url,
-            params={"api-version": APIM_PREVIEW_API_VERSION},
-            json_body={"properties": base_props},
-        )
+    response = _request(
+        "PUT",
+        url,
+        params={"api-version": APIM_PREVIEW_API_VERSION},
+        json_body={"properties": properties},
+    )
     _wait_for_completion(response)
     return _json_body(response)
+
+
+def assert_no_llm_message_capture(diagnostic: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Raise :class:`PrivacyConfigurationError` if a diagnostic readback captures content.
+
+    Fails when the diagnostic is missing, when LLM logs are enabled, when LLM
+    request/response messages are configured without ``logs: "disabled"``, or
+    when any HTTP body byte limit is nonzero. Returns scalar evidence.
+    """
+    if not diagnostic:
+        raise PrivacyConfigurationError("API diagnostic readback is missing.")
+    props = diagnostic.get("properties", diagnostic) or {}
+    llm = props.get("largeLanguageModel") or {}
+    llm_logs = str(llm.get("logs") or "").lower()
+    message_settings = [
+        (llm.get(direction) or {}).get("messages") for direction in ("requests", "responses")
+    ]
+    if llm_logs == "enabled" or (llm_logs != "disabled" and any(message_settings)):
+        raise PrivacyConfigurationError(
+            "API diagnostic captures LLM request/response messages; message capture must stay off."
+        )
+    max_body_bytes = 0
+    for pipeline in ("frontend", "backend"):
+        for direction in ("request", "response"):
+            settings = ((props.get(pipeline) or {}).get(direction) or {})
+            max_body_bytes = max(max_body_bytes, int((settings.get("body") or {}).get("bytes") or 0))
+    if max_body_bytes:
+        raise PrivacyConfigurationError(
+            f"API diagnostic logs up to {max_body_bytes} HTTP body bytes; body capture must stay at 0."
+        )
+    return {
+        "llm_block_present": bool(llm),
+        "llm_logs": llm_logs or "absent",
+        "max_body_bytes": max_body_bytes,
+        "metrics": bool(props.get("metrics")),
+    }
 
 
 def get_api_diagnostic(
@@ -665,6 +858,7 @@ def query_token_metrics(
     interval_minutes: int = 5,
     region: Optional[str] = None,
     app_insights_resource_id: Optional[str] = None,
+    logger_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Query APIM token metrics, split by a dimension, from Application Insights.
 
@@ -679,17 +873,21 @@ def query_token_metrics(
     metrics here, under any filter string - so this function reads the App
     Insights ``customMetrics`` table instead.
 
-    ``resource_id`` is the APIM service resource id; it is used to resolve the
-    connected Application Insights component when ``app_insights_resource_id``
-    is not supplied. ``namespace``, ``interval_minutes`` and ``region`` are kept
-    for backwards compatibility with existing callers and are unused.
+    ``resource_id`` is the APIM service resource id. The Application Insights
+    component is ``app_insights_resource_id`` when supplied, otherwise the
+    destination of the explicitly named ``logger_id`` on that service; there is
+    no "first logger" discovery. ``namespace``, ``interval_minutes`` and
+    ``region`` are kept for backwards compatibility with existing callers and
+    are unused.
     """
-    target = app_insights_resource_id or _app_insights_for_apim_resource_id(resource_id)
+    target = app_insights_resource_id
+    if not target and logger_id:
+        target = _app_insights_for_apim_resource_id(resource_id, logger_id)
     if not target:
         raise RuntimeError(
             "No Application Insights resource could be resolved for "
-            f"{resource_id}. Pass app_insights_resource_id explicitly, or "
-            "attach an Application Insights logger to the APIM instance."
+            f"{resource_id}. Pass app_insights_resource_id, or the explicit "
+            "logger_id of an Application Insights logger on the APIM instance."
         )
     return query_app_insights_token_metrics(
         app_insights_resource_id=target,
@@ -701,8 +899,8 @@ def query_token_metrics(
     )
 
 
-def _app_insights_for_apim_resource_id(resource_id: str) -> Optional[str]:
-    """Resolve the App Insights component wired to an APIM service resource id."""
+def _app_insights_for_apim_resource_id(resource_id: str, logger_id: str) -> Optional[str]:
+    """Resolve the App Insights component behind one explicit logger on an APIM service."""
     parts = [part for part in resource_id.split("/") if part]
     lowered = [part.lower() for part in parts]
     expected = [
@@ -723,7 +921,7 @@ def _app_insights_for_apim_resource_id(resource_id: str) -> Optional[str]:
     ):
         return None
     subscription_id, resource_group, apim_name = parts[1], parts[3], parts[7]
-    logger = get_app_insights_for_apim(subscription_id, resource_group, apim_name)
+    logger = get_app_insights_logger(subscription_id, resource_group, apim_name, logger_id)
     return (logger or {}).get("app_insights_resource_id")
 
 

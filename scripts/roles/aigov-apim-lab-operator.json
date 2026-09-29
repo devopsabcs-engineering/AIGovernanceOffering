@@ -1,0 +1,40 @@
+{
+  "Name": "AIGov APIM Lab Operator",
+  "IsCustom": true,
+  "Description": "Lab runtime: manage API Management child objects used by the notebooks and lab automation. Cannot create, change, or delete the API Management service itself.",
+  "Actions": [
+    "Microsoft.ApiManagement/service/read",
+    "Microsoft.ApiManagement/service/apis/read",
+    "Microsoft.ApiManagement/service/apis/write",
+    "Microsoft.ApiManagement/service/apis/delete",
+    "Microsoft.ApiManagement/service/apis/operations/read",
+    "Microsoft.ApiManagement/service/apis/operations/write",
+    "Microsoft.ApiManagement/service/apis/policies/read",
+    "Microsoft.ApiManagement/service/apis/policies/write",
+    "Microsoft.ApiManagement/service/apis/diagnostics/read",
+    "Microsoft.ApiManagement/service/apis/diagnostics/write",
+    "Microsoft.ApiManagement/service/apis/diagnostics/delete",
+    "Microsoft.ApiManagement/service/backends/read",
+    "Microsoft.ApiManagement/service/backends/write",
+    "Microsoft.ApiManagement/service/backends/delete",
+    "Microsoft.ApiManagement/service/namedValues/read",
+    "Microsoft.ApiManagement/service/namedValues/write",
+    "Microsoft.ApiManagement/service/namedValues/delete",
+    "Microsoft.ApiManagement/service/products/read",
+    "Microsoft.ApiManagement/service/products/write",
+    "Microsoft.ApiManagement/service/products/apis/read",
+    "Microsoft.ApiManagement/service/products/apis/write",
+    "Microsoft.ApiManagement/service/subscriptions/read",
+    "Microsoft.ApiManagement/service/subscriptions/write",
+    "Microsoft.ApiManagement/service/subscriptions/delete",
+    "Microsoft.ApiManagement/service/subscriptions/listSecrets/action",
+    "Microsoft.ApiManagement/service/loggers/read",
+    "Microsoft.ApiManagement/service/loggers/write"
+  ],
+  "NotActions": [],
+  "DataActions": [],
+  "NotDataActions": [],
+  "AssignableScopes": [
+    "/subscriptions/{subscriptionId}/resourceGroups/{labResourceGroup}"
+  ]
+}

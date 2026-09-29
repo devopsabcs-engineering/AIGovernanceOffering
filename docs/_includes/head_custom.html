@@ -1,0 +1,50 @@
+{%- assign is_fr_page = false -%}
+{%- if page.lang == 'fr' or page.url contains '/fr/' -%}
+  {%- assign is_fr_page = true -%}
+{%- endif -%}
+{%- assign fr_href = "/fr" | relative_url -%}
+{%- assign fr_href_prefix = fr_href | append: "/" -%}
+<style>
+  /* The sidebar is built once for the whole site; hide the other language's links per page.
+     Hrefs are matched with the baseurl prefix so this works under /AIGovernanceOffering/. */
+  {%- if is_fr_page %}
+  #site-nav .nav-list-item:has(> a.nav-list-link[href]:not([href="{{ fr_href }}"]):not([href^="{{ fr_href_prefix }}"])) { display: none; }
+  {%- else %}
+  #site-nav .nav-list-item:has(> a.nav-list-link:is([href="{{ fr_href }}"], [href^="{{ fr_href_prefix }}"])) { display: none; }
+  {%- endif %}
+  .nav-list-item.lang-hidden { display: none !important; }
+</style>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var isFrPage = {{ is_fr_page }};
+    var frHref = {{ fr_href | jsonify }};
+    var frHrefPrefix = {{ fr_href_prefix | jsonify }};
+
+    // Fallback for browsers without CSS :has() support.
+    document.querySelectorAll('#site-nav .nav-list-item').forEach(function (item) {
+      var link = item.querySelector('a.nav-list-link');
+      if (!link || !link.hasAttribute('href')) return;
+      var href = link.getAttribute('href') || '';
+      var isFrLink = href === frHref || href.indexOf(frHrefPrefix) === 0;
+      if (isFrPage !== isFrLink) item.classList.add('lang-hidden');
+    });
+
+    // Kramdown leaves GitHub alert markers as text; map them onto the callout classes in _config.yml.
+    var titles = isFrPage
+      ? { NOTE: 'Remarque', TIP: 'Conseil', IMPORTANT: 'Important', WARNING: 'Avertissement', CAUTION: 'Attention' }
+      : { NOTE: 'Note', TIP: 'Tip', IMPORTANT: 'Important', WARNING: 'Warning', CAUTION: 'Caution' };
+    document.querySelectorAll('.main-content blockquote').forEach(function (quote) {
+      var first = quote.firstElementChild;
+      if (!first || first.tagName !== 'P') return;
+      var match = /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/.exec(first.innerHTML);
+      if (!match) return;
+      var kind = match[1];
+      first.innerHTML = first.innerHTML.slice(match[0].length);
+      if (!first.innerHTML.trim()) first.remove();
+      var title = document.createElement('p');
+      title.textContent = titles[kind];
+      quote.insertBefore(title, quote.firstChild);
+      quote.classList.add(kind.toLowerCase() + '-title');
+    });
+  });
+</script>

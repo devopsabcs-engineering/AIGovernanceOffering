@@ -1,0 +1,15 @@
+{
+  "snapshot_id": "fixture-test-only",
+  "source": "Synthetic test fixture; not a retail price.",
+  "retrieved_at": "2026-09-01T00:00:00Z",
+  "currency": "USD",
+  "fixture": true,
+  "records": [
+    {"model": "test-model", "version": "2026-01-01", "sku": "Standard", "region": "canadaeast", "currency": "USD", "effective_from": "2026-01-01T00:00:00Z", "effective_to": null, "meter": "input", "meter_id": "fixture-input", "unit": "per_million_tokens", "unit_price": 0.5},
+    {"model": "test-model", "version": "2026-01-01", "sku": "Standard", "region": "canadaeast", "currency": "USD", "effective_from": "2026-01-01T00:00:00Z", "effective_to": null, "meter": "output", "meter_id": "fixture-output", "unit": "per_thousand_tokens", "unit_price": 0.002},
+    {"model": "test-model", "version": "2026-01-01", "sku": "Standard", "region": "eastus", "currency": "USD", "effective_from": "2026-01-01T00:00:00Z", "effective_to": null, "meter": "input", "meter_id": "fixture-input-dup-a", "unit": "per_million_tokens", "unit_price": 0.5},
+    {"model": "test-model", "version": "2026-01-01", "sku": "Standard", "region": "eastus", "currency": "USD", "effective_from": "2026-01-01T00:00:00Z", "effective_to": null, "meter": "input", "meter_id": "fixture-input-dup-b", "unit": "per_million_tokens", "unit_price": 0.6},
+    {"model": "test-model", "version": "2026-01-01", "sku": "Standard", "region": "eastus", "currency": "USD", "effective_from": "2026-01-01T00:00:00Z", "effective_to": null, "meter": "output", "meter_id": "fixture-output-eastus", "unit": "per_million_tokens", "unit_price": 2.0},
+    {"model": "test-model", "version": "2026-01-01", "sku": "Standard", "region": "westus", "currency": "USD", "effective_from": "2026-01-01T00:00:00Z", "effective_to": null, "meter": "output", "meter_id": "fixture-output-westus", "unit": "per_million_tokens", "unit_price": 2.0}
+  ]
+}

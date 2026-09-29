@@ -58,87 +58,87 @@ Add RG-scoped Bicep, an admin bootstrap, three GitHub workflows, safe headless n
 
 ## Implementation Checklist
 
-### [ ] Implementation Phase 1: Local safety, privacy, and headless compatibility
+### [x] Implementation Phase 1: Local safety, privacy, and headless compatibility
 
 <!-- parallelizable: true -->
 
-* [ ] Step 1.1: Prevent secret output at source
+* [x] Step 1.1: Prevent secret output at source
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 30-53)
-* [ ] Step 1.2: Explicit logger ownership and managed-identity ingestion
+* [x] Step 1.2: Explicit logger ownership and managed-identity ingestion
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 54-78)
-* [ ] Step 1.3: Disable LLM message capture
+* [x] Step 1.3: Disable LLM message capture
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 79-100)
-* [ ] Step 1.4: User-assigned identity client ID support and subscription-key stripping
+* [x] Step 1.4: User-assigned identity client ID support and subscription-key stripping
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 101-125)
-* [ ] Step 1.5: Headless configuration contract
+* [x] Step 1.5: Headless configuration contract
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 126-146)
-* [ ] Step 1.6: Setup notebook portability
+* [x] Step 1.6: Setup notebook portability
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 147-158)
-* [ ] Step 1.7: Structured objective results and semantic classifiers
+* [x] Step 1.7: Structured objective results and semantic classifiers
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 159-190)
-* [ ] Step 1.8: Session-wide dispatch guard
+* [x] Step 1.8: Session-wide dispatch guard
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 191-211)
-* [ ] Step 1.9: Validate phase changes
+* [x] Step 1.9: Validate phase changes (144 tests pass via `discover -s tests`; nbformat absent, structural check used)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 212-218)
 
-### [ ] Implementation Phase 2: Automation scripts with synthetic fixtures
+### [x] Implementation Phase 2: Automation scripts with synthetic fixtures
 
 <!-- parallelizable: false -->
 
 Not parallelizable with Phase 1 (imports its shared modules). Once Phase 1 completes, it touches no files owned by Phases 3 or 4 and may run alongside them.
 
-* [ ] Step 2.1: Session orchestrator scripts/lab_session.py (init-session, preflight with tombstone check, what-if, append-only session-scoped manifest, deploy, readiness, probe-scopes, write-env, run-notebooks, mode-table cleanup, human-only purge)
+* [x] Step 2.1: Session orchestrator scripts/lab_session.py (init-session, preflight with tombstone check, what-if, append-only session-scoped manifest, deploy, readiness, probe-scopes, write-env, run-notebooks, mode-table cleanup, human-only purge)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 225-270)
-* [ ] Step 2.2: Notebook completion checker
+* [x] Step 2.2: Notebook completion checker
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 271-284)
-* [ ] Step 2.3: Sanitized evidence and rendering
+* [x] Step 2.3: Sanitized evidence and rendering
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 285-300)
-* [ ] Step 2.4: Traffic and showback scripts
+* [x] Step 2.4: Traffic and showback scripts
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 301-317)
-* [ ] Step 2.5: CI dependencies
+* [x] Step 2.5: CI dependencies
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 318-321)
-* [ ] Step 2.6: Validate phase changes
+* [x] Step 2.6: Validate phase changes
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 322-326)
 
-### [ ] Implementation Phase 3: Infrastructure and bootstrap
+### [x] Implementation Phase 3: Infrastructure and bootstrap
 
 <!-- parallelizable: true -->
 
-* [ ] Step 3.1: Administrative bootstrap scripts/bootstrap-lab.ps1 (separate identity RG, custom APIM child-object and preflight-reader roles; author only, execution in Phase 6)
+* [x] Step 3.1: Administrative bootstrap scripts/bootstrap-lab.ps1 (separate identity RG, custom APIM child-object and preflight-reader roles; author only, execution in Phase 6)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 333-362)
-* [ ] Step 3.2: RG-scoped Bicep
+* [x] Step 3.2: RG-scoped Bicep
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 363-383)
-* [ ] Step 3.3: Platform policies and tests/test_infra.py
+* [x] Step 3.3: Platform policies and tests/test_infra.py
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 384-397)
-* [ ] Step 3.4: Validate phase changes
+* [x] Step 3.4: Validate phase changes
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 398-403)
 
-### [ ] Implementation Phase 4: Bilingual lab site
+### [x] Implementation Phase 4: Bilingual lab site
 
 <!-- parallelizable: true -->
 
-* [ ] Step 4.1: Jekyll scaffold matching the sibling
+* [x] Step 4.1: Jekyll scaffold matching the sibling
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 410-419)
-* [ ] Step 4.2: Lab pages EN and FR
+* [x] Step 4.2: Lab pages EN and FR
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 420-426)
-* [ ] Step 4.3: README update
+* [x] Step 4.3: README update
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 427-430)
-* [ ] Step 4.4: Validate phase changes
+* [x] Step 4.4: Validate phase changes
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 431-437)
 
-### [ ] Implementation Phase 5: GitHub workflows
+### [x] Implementation Phase 5: GitHub workflows
 
 <!-- parallelizable: false -->
 
 Requires Phases 2, 3, and 4.
 
-* [ ] Step 5.1: ci.yml (credential-free)
+* [x] Step 5.1: ci.yml (credential-free)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 444-448)
-* [ ] Step 5.2: lab-session.yml (workflow-level lock; one protected cloud job governed by a per-mode step matrix; paid steps use !cancelled() and require readiness; always() only for sanitize and cleanup; full step timeouts; credential-free render job; lock-test mode)
+* [x] Step 5.2: lab-session.yml (workflow-level lock; one protected cloud job governed by a per-mode step matrix; paid steps use !cancelled() and require readiness; always() only for sanitize and cleanup; full step timeouts; credential-free render job; lock-test mode)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 449-485)
-* [ ] Step 5.3: teardown.yml (protected, manual, dry run default, no purge)
+* [x] Step 5.3: teardown.yml (protected, manual, dry run default, no purge)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 486-489)
-* [ ] Step 5.4: Validate phase changes
+* [x] Step 5.4: Validate phase changes
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 490-496)
 
 ### [ ] Implementation Phase 6: Approved bootstrap and live acceptance
@@ -173,10 +173,10 @@ Stop for explicit user approval before each step. No Azure or GitHub-settings mu
 
 Run Steps 8.1-8.2 once after Phase 5 (local, credential-free) and again after Phase 7 if Phases 6-7 are approved. If approvals are not given, finish after Phase 5 and report G1-G9 as OPEN.
 
-* [ ] Step 8.1: Run full project validation
+* [x] Step 8.1: Run full project validation (local run after Phase 5: 285 tests OK, Bicep build/lint clean, actionlint clean, Jekyll build + crawl clean, PSScriptAnalyzer clean; repeat after Phase 7)
   * Unit tests, Bicep build and lint, actionlint, Jekyll build and crawl, PSScriptAnalyzer
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 541-548)
-* [ ] Step 8.2: Fix minor validation issues
+* [x] Step 8.2: Fix minor validation issues (12 doc/code drift fixes, Windows dotenv retry)
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 549-552)
 * [ ] Step 8.3: Report blocking issues and gate status G1-G9
   * Details: .copilot-tracking/details/2026-09-28/apim-basicv2-iac-labs-details.md (Lines 553-556)

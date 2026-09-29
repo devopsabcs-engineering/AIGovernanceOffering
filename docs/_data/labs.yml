@@ -1,0 +1,68 @@
+# Canonical lab page map shared by the English and French sites.
+# The slug is the file name under labs/ and fr/labs/ and the permalink suffix for both languages.
+# Evidence images are named <image_prefix>-summary.png (plus lab06-chargeback-tokens.png) or
+# <image_prefix>-status.png by scripts/render_evidence.py, and appear under assets/images/ only after human review.
+- slug: lab-00-environment
+  number: "00"
+  title_en: "Deploy the lab environment"
+  title_fr: "Déployer l'environnement du laboratoire"
+  image_prefix: lab00-environment
+  evidence_owner_en: "Session deployment"
+  evidence_owner_fr: "Déploiement de la session"
+  source: "infra/main.bicep and scripts/lab_session.py"
+- slug: lab-01-setup-validation
+  number: "01"
+  title_en: "Setup and validation"
+  title_fr: "Configuration et validation"
+  image_prefix: lab01-setup-validation
+  evidence_owner_en: "Setup notebook"
+  evidence_owner_fr: "Carnet de configuration"
+  source: "notebooks/00-setup-and-validation.ipynb"
+- slug: lab-02-token-limits
+  number: "02"
+  title_en: "Token limits and quotas"
+  title_fr: "Limites et quotas de jetons"
+  image_prefix: lab02-token-limits
+  evidence_owner_en: "Demo 1"
+  evidence_owner_fr: "Démo 1"
+  source: "notebooks/demo1-token-limits.ipynb"
+- slug: lab-03-token-metrics
+  number: "03"
+  title_en: "Token metrics"
+  title_fr: "Métriques de jetons"
+  image_prefix: lab03-token-metrics
+  evidence_owner_en: "Demo 2"
+  evidence_owner_fr: "Démo 2"
+  source: "notebooks/demo2-token-metrics.ipynb"
+- slug: lab-04-content-safety
+  number: "04"
+  title_en: "Content safety"
+  title_fr: "Sécurité du contenu"
+  image_prefix: lab04-content-safety
+  evidence_owner_en: "Demo 3"
+  evidence_owner_fr: "Démo 3"
+  source: "notebooks/demo3-content-safety.ipynb"
+- slug: lab-05-resilient-pool
+  number: "05"
+  title_en: "Mock resilient backend pool"
+  title_fr: "Pool de back-ends résilient simulé"
+  image_prefix: lab05-resilient-pool
+  evidence_owner_en: "Demo 4"
+  evidence_owner_fr: "Démo 4"
+  source: "notebooks/demo4-resilient-pool.ipynb"
+- slug: lab-06-chargeback
+  number: "06"
+  title_en: "Estimated model-token showback"
+  title_fr: "Répartition estimée des coûts de jetons"
+  image_prefix: lab06-chargeback
+  evidence_owner_en: "Bounded traffic and report"
+  evidence_owner_fr: "Trafic borné et rapport"
+  source: "scripts/generate_traffic.py and scripts/showback_report.py"
+- slug: lab-07-teardown
+  number: "07"
+  title_en: "Teardown and residual cost exposure"
+  title_fr: "Démantèlement et exposition résiduelle aux coûts"
+  image_prefix: lab07-teardown
+  evidence_owner_en: "Recovery inventory"
+  evidence_owner_fr: "Inventaire de récupération"
+  source: "scripts/lab_session.py cleanup and .github/workflows/teardown.yml"
