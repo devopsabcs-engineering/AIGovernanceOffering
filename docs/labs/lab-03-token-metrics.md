@@ -81,7 +81,9 @@ Ingestion delay is normal, so the query polls with backoff for a bounded time. I
 ### Exercise 3.6: Review the session evidence
 
 > [!NOTE]
-> Evidence pending review. The images `lab03-token-metrics-summary.png` (passed) or `lab03-token-metrics-status.png` (any other status) are rendered from the Demo 2 objective results and appear here only after a maintainer reviews the sanitized session evidence.
+> Reviewed evidence from session `36608221120-1` ([workflow run](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), rendered on 2026-09-29 from sanitized results only.
+
+![Objective results for Lab 03 from the reviewed session]({{ '/assets/images/lab03-token-metrics-summary.png' | relative_url }})
 
 ## Validation Checklist
 

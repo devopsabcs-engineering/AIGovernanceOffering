@@ -82,7 +82,9 @@ Résultat attendu : un appel direct à l'API simulée sans ses informations d'id
 ### Exercice 5.7 : Examiner les preuves de la session
 
 > [!NOTE]
-> Preuves en attente d'examen. Les images `lab05-resilient-pool-summary.png` (réussite) ou `lab05-resilient-pool-status.png` (tout autre état) sont produites à partir des résultats d'objectifs de la démo 4 et n'apparaissent ici qu'après qu'une personne responsable a examiné les preuves expurgées de la session.
+> Preuves examinées de la session `36608221120-1` ([exécution du flux de travail](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), produites le 2026-09-29 uniquement à partir de résultats expurgés.
+
+![Résultats des objectifs de l'atelier 05 pour la session examinée]({{ '/assets/images/lab05-resilient-pool-summary.png' | relative_url }})
 
 ## Liste de vérification
 

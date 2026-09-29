@@ -95,7 +95,9 @@ La préparation interroge la passerelle, la relecture de l'enregistreur et du di
 ### Exercice 0.6 : Examiner les preuves de la session
 
 > [!NOTE]
-> Preuves en attente d'examen. Les images `lab00-environment-summary.png` (réussite) ou `lab00-environment-status.png` (tout autre état) sont produites à partir du sommaire de préparation et n'apparaissent ici qu'après qu'une personne responsable a examiné les preuves expurgées de la session.
+> Preuves examinées de la session `36608221120-1` ([exécution du flux de travail](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), produites le 2026-09-29 uniquement à partir de résultats expurgés.
+
+![Résultats des objectifs de l'atelier 00 pour la session examinée]({{ '/assets/images/lab00-environment-summary.png' | relative_url }})
 
 ## Liste de vérification
 

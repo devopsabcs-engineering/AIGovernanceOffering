@@ -88,7 +88,9 @@ Les bannières du carnet s'adressent aux personnes. Le fichier de résultats est
 ### Exercice 1.5 : Examiner les preuves de la session
 
 > [!NOTE]
-> Preuves en attente d'examen. Les images `lab01-setup-validation-summary.png` (réussite) ou `lab01-setup-validation-status.png` (tout autre état) sont produites à partir des résultats d'objectifs de configuration et n'apparaissent ici qu'après qu'une personne responsable a examiné les preuves expurgées de la session.
+> Preuves examinées de la session `36608221120-1` ([exécution du flux de travail](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), produites le 2026-09-29 uniquement à partir de résultats expurgés.
+
+![Résultats des objectifs de l'atelier 01 pour la session examinée]({{ '/assets/images/lab01-setup-validation-summary.png' | relative_url }})
 
 ## Liste de vérification
 

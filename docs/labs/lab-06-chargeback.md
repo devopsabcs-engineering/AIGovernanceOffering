@@ -75,7 +75,11 @@ Expected result: you can explain that product policies do not apply to API-scope
 ### Exercise 6.6: Review the session evidence
 
 > [!NOTE]
-> Evidence pending review. The images `lab06-chargeback-summary.png` and `lab06-chargeback-tokens.png` (passed) or `lab06-chargeback-status.png` (any other state) are rendered from the showback coverage and reconciliation status and appear here only after a maintainer reviews the sanitized session evidence. An incomplete report is published as a status card, never as a success image.
+> Reviewed evidence from session `36608221120-1` ([workflow run](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), rendered on 2026-09-29 from sanitized results only. Amounts are estimated model-token showback at retail prices, not billed charges.
+
+![Estimated model-token showback by team from the reviewed session]({{ '/assets/images/lab06-chargeback-summary.png' | relative_url }})
+
+![Prompt and completion tokens by team from the reviewed session]({{ '/assets/images/lab06-chargeback-tokens.png' | relative_url }})
 
 ## Validation Checklist
 

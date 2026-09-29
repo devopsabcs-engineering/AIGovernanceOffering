@@ -94,7 +94,9 @@ Readiness polls the gateway, the logger and diagnostic readback including custom
 ### Exercise 0.6: Review the session evidence
 
 > [!NOTE]
-> Evidence pending review. The images `lab00-environment-summary.png` (passed) or `lab00-environment-status.png` (any other status) are rendered from the readiness summary and appear here only after a maintainer reviews the sanitized session evidence.
+> Reviewed evidence from session `36608221120-1` ([workflow run](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), rendered on 2026-09-29 from sanitized results only.
+
+![Objective results for Lab 00 from the reviewed session]({{ '/assets/images/lab00-environment-summary.png' | relative_url }})
 
 ## Validation Checklist
 

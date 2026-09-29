@@ -82,7 +82,9 @@ When the outbound policy detects a violation in a stream, APIM stops forwarding 
 ### Exercise 4.5: Review the session evidence
 
 > [!NOTE]
-> Evidence pending review. The images `lab04-content-safety-summary.png` (passed) or `lab04-content-safety-status.png` (any other status) are rendered from the Demo 3 objective results and appear here only after a maintainer reviews the sanitized session evidence. An inconclusive objective is published as a status card, never as a success image.
+> Reviewed evidence from session `36608221120-1` ([workflow run](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), rendered on 2026-09-29 from sanitized results only. The streaming check is observational: `inconclusive (not verified)` means the model output stayed below every category threshold, which is not proof of an intervention.
+
+![Objective results for Lab 04 from the reviewed session]({{ '/assets/images/lab04-content-safety-summary.png' | relative_url }})
 
 ## Validation Checklist
 

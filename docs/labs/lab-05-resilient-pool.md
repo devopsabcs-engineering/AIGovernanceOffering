@@ -81,7 +81,9 @@ Expected result: a direct call to the mock API without its credential is rejecte
 ### Exercise 5.7: Review the session evidence
 
 > [!NOTE]
-> Evidence pending review. The images `lab05-resilient-pool-summary.png` (passed) or `lab05-resilient-pool-status.png` (any other status) are rendered from the Demo 4 objective results and appear here only after a maintainer reviews the sanitized session evidence.
+> Reviewed evidence from session `36608221120-1` ([workflow run](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), rendered on 2026-09-29 from sanitized results only.
+
+![Objective results for Lab 05 from the reviewed session]({{ '/assets/images/lab05-resilient-pool-summary.png' | relative_url }})
 
 ## Validation Checklist
 

@@ -87,7 +87,9 @@ The banners in the notebook are for people. The result file is the acceptance re
 ### Exercise 1.5: Review the session evidence
 
 > [!NOTE]
-> Evidence pending review. The images `lab01-setup-validation-summary.png` (passed) or `lab01-setup-validation-status.png` (any other status) are rendered from the setup objective results and appear here only after a maintainer reviews the sanitized session evidence.
+> Reviewed evidence from session `36608221120-1` ([workflow run](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), rendered on 2026-09-29 from sanitized results only.
+
+![Objective results for Lab 01 from the reviewed session]({{ '/assets/images/lab01-setup-validation-summary.png' | relative_url }})
 
 ## Validation Checklist
 

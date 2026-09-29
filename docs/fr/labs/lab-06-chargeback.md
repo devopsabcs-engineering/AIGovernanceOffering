@@ -76,7 +76,11 @@ Résultat attendu : vous pouvez expliquer que les stratégies de produit ne s'ap
 ### Exercice 6.6 : Examiner les preuves de la session
 
 > [!NOTE]
-> Preuves en attente d'examen. Les images `lab06-chargeback-summary.png` et `lab06-chargeback-tokens.png` (réussite) ou `lab06-chargeback-status.png` (tout autre état) sont produites à partir de la couverture et de l'état de rapprochement de la répartition des coûts et n'apparaissent ici qu'après qu'une personne responsable a examiné les preuves expurgées de la session. Un rapport incomplet est publié sous forme de carte d'état, jamais sous forme d'image de réussite.
+> Preuves examinées de la session `36608221120-1` ([exécution du flux de travail](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), produites le 2026-09-29 uniquement à partir de résultats expurgés. Les montants sont une répartition estimée des jetons du modèle au prix de détail, et non des frais facturés.
+
+![Répartition estimée des jetons du modèle par équipe pour la session examinée]({{ '/assets/images/lab06-chargeback-summary.png' | relative_url }})
+
+![Jetons d'invite et de réponse par équipe pour la session examinée]({{ '/assets/images/lab06-chargeback-tokens.png' | relative_url }})
 
 ## Liste de vérification
 

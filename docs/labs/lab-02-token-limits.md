@@ -82,7 +82,9 @@ The resources stay in place because later labs reuse the same APIM instance.
 ### Exercise 2.6: Review the session evidence
 
 > [!NOTE]
-> Evidence pending review. The images `lab02-token-limits-summary.png` (passed) or `lab02-token-limits-status.png` (any other status) are rendered from the Demo 1 objective results and appear here only after a maintainer reviews the sanitized session evidence.
+> Reviewed evidence from session `36608221120-1` ([workflow run](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), rendered on 2026-09-29 from sanitized results only.
+
+![Objective results for Lab 02 from the reviewed session]({{ '/assets/images/lab02-token-limits-summary.png' | relative_url }})
 
 ## Validation Checklist
 

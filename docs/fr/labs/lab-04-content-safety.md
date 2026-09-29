@@ -83,7 +83,9 @@ Lorsque la stratégie sortante détecte une violation dans un flux, APIM cesse d
 ### Exercice 4.5 : Examiner les preuves de la session
 
 > [!NOTE]
-> Preuves en attente d'examen. Les images `lab04-content-safety-summary.png` (réussite) ou `lab04-content-safety-status.png` (tout autre état) sont produites à partir des résultats d'objectifs de la démo 3 et n'apparaissent ici qu'après qu'une personne responsable a examiné les preuves expurgées de la session. Un objectif non concluant est publié sous forme de carte d'état, jamais sous forme d'image de réussite.
+> Preuves examinées de la session `36608221120-1` ([exécution du flux de travail](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), produites le 2026-09-29 uniquement à partir de résultats expurgés. La vérification en continu est observationnelle : `inconclusive (not verified)` signifie que la réponse du modèle est restée sous tous les seuils de catégorie, ce qui ne prouve pas une intervention.
+
+![Résultats des objectifs de l'atelier 04 pour la session examinée]({{ '/assets/images/lab04-content-safety-summary.png' | relative_url }})
 
 ## Liste de vérification
 

@@ -83,7 +83,9 @@ Les ressources restent en place, car les ateliers suivants réutilisent la même
 ### Exercice 2.6 : Examiner les preuves de la session
 
 > [!NOTE]
-> Preuves en attente d'examen. Les images `lab02-token-limits-summary.png` (réussite) ou `lab02-token-limits-status.png` (tout autre état) sont produites à partir des résultats d'objectifs de la démo 1 et n'apparaissent ici qu'après qu'une personne responsable a examiné les preuves expurgées de la session.
+> Preuves examinées de la session `36608221120-1` ([exécution du flux de travail](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), produites le 2026-09-29 uniquement à partir de résultats expurgés.
+
+![Résultats des objectifs de l'atelier 02 pour la session examinée]({{ '/assets/images/lab02-token-limits-summary.png' | relative_url }})
 
 ## Liste de vérification
 
