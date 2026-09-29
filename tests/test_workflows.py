@@ -13,7 +13,7 @@ except ImportError:  # pragma: no cover - CI installs PyYAML from requirements-c
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 CLOUD_WORKFLOWS = ("lab-session.yml", "teardown.yml")
-ALL_WORKFLOWS = ("ci.yml",) + CLOUD_WORKFLOWS
+ALL_WORKFLOWS = ("ci.yml", "pages.yml") + CLOUD_WORKFLOWS
 PARAMS = ROOT / "infra" / "main.bicepparam"
 HOSTED_JOB_LIMIT = 360
 LOCK_GROUP = "aigov-lab-env"
@@ -167,6 +167,20 @@ class WorkflowShapeTests(unittest.TestCase):
                 triggers = _triggers(_load(name))
                 for forbidden in ("workflow_call", "schedule", "pull_request_target", "workflow_run"):
                     self.assertNotIn(forbidden, triggers)
+
+    def test_pages_publishes_docs_without_azure_access(self):
+        data = _load("pages.yml")
+        self.assertEqual(data["permissions"], {"contents": "read"})
+        self.assertEqual(set(_triggers(data)), {"push", "workflow_dispatch"})
+        self.assertNotEqual(data["concurrency"]["group"], LOCK_GROUP)
+        text = _text("pages.yml")
+        self.assertNotIn("azure/login", text)
+        self.assertNotIn("AIGOV_", text)
+        self.assertIn("jekyll build --source docs", text)
+        deploy = data["jobs"]["deploy"]
+        self.assertEqual(deploy["environment"]["name"], "github-pages")
+        self.assertEqual(deploy["permissions"], {"pages": "write", "id-token": "write"})
+        self.assertNotIn("permissions", data["jobs"]["build"])
 
     def test_exactly_one_environment_job_per_cloud_workflow(self):
         expected = {"lab-session.yml": "cloud", "teardown.yml": "teardown"}
