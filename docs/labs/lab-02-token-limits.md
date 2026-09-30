@@ -53,6 +53,8 @@ The limit values come from named values rather than literals, and the backend au
 
 Open `notebooks/demo1-token-limits.ipynb` and run the cells through the baseline call.
 
+The baseline cell first sends unscored warm-up calls until the new API, subscription, and policy answer through the gateway. APIM applies new configuration asynchronously, so a fresh instance can return `404` or `401` for about a minute. The warm-up uses its own `x-demo-run` value, so the Demo 1 counters start clean.
+
 Expected result: one `200` response with the three token headers present. This records the `demo1.baseline` objective.
 
 With `estimate-prompt-tokens="false"`, `tokens-consumed` reflects the prompt and completion usage the model reported.

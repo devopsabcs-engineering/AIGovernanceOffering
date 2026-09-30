@@ -54,6 +54,8 @@ Les valeurs des limites proviennent de valeurs nommées plutôt que de littérau
 
 Ouvrez `notebooks/demo1-token-limits.ipynb` et exécutez les cellules jusqu'à l'appel de référence.
 
+La cellule de référence envoie d'abord des appels de préchauffage non notés jusqu'à ce que la nouvelle API, l'abonnement et la stratégie répondent par la passerelle. APIM applique la nouvelle configuration de façon asynchrone; une instance neuve peut donc renvoyer `404` ou `401` pendant environ une minute. Le préchauffage utilise sa propre valeur `x-demo-run`, de sorte que les compteurs de la démo 1 démarrent à zéro.
+
 Résultat attendu : une réponse `200` avec les trois en-têtes de jetons. Cet appel consigne l'objectif `demo1.baseline`.
 
 Avec `estimate-prompt-tokens="false"`, `tokens-consumed` reflète l'utilisation d'invite et de réponse rapportée par le modèle.

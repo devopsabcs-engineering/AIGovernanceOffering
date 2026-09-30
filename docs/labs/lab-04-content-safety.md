@@ -65,6 +65,8 @@ To use an approved set without editing code, set `DEMO3_FIXTURES_FILE` to a JSON
 
 Open `notebooks/demo3-content-safety.ipynb` and run through the test matrix.
 
+The matrix cell first sends unscored warm-up calls until the new API, subscription, and policy answer through the gateway, because APIM applies new configuration asynchronously.
+
 Expected result: the safe business prompt returns `200` and records `demo3.safe_prompt`. The prompt attack returns `403` with content-safety provenance and records `demo3.prompt_shield_block`. The harm-threshold row is shown for discussion and may report **NOT TRIPPED**.
 
 A **NOT TRIPPED** row means the fixture scored below the threshold. The approved responses are to substitute a pre-approved evaluation fixture or to lower the relevant `CONTENT_SAFETY_THRESHOLD_*` value for the demonstration only.

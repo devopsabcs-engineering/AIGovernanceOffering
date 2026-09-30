@@ -68,6 +68,8 @@ Exécutez les sections de référence et de démonstration.
 
 Résultat attendu : un appel de référence, puis cinq appels en tant que `claims-portal` et trois appels en tant que `analyst-copilot`, chacun dans l'enveloppe de la session.
 
+Avant l'appel de référence, le carnet envoie des appels de préchauffage non notés jusqu'à ce que la nouvelle API, l'abonnement et la stratégie répondent par la passerelle. Un préchauffage réussi est mesuré en tant que `claims-portal`; son utilisation rapportée par le fournisseur est donc incluse dans le rapprochement.
+
 ### Exercice 3.5 (pratique) : Interroger et rapprocher
 
 Exécutez les sections de vérification et d'acceptation.

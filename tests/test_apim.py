@@ -196,6 +196,32 @@ class ApimPolicyTests(unittest.TestCase):
                 self.assertNotIn("client-id", path.read_text(encoding="utf-8"))
 
 
+class WaitForGatewayPropagationTests(unittest.TestCase):
+    def test_retries_until_ready_and_returns_attempt(self):
+        results = iter([{"status": 404}, {"status": 401}, {"status": 200}])
+        sleeps = []
+        attempt = apim.wait_for_gateway_propagation(
+            lambda: next(results), attempts=5, wait_seconds=3, sleep=sleeps.append
+        )
+        self.assertEqual(attempt, 3)
+        self.assertEqual(sleeps, [3, 3])
+
+    def test_custom_ready_predicate(self):
+        results = iter([{"status": 200, "tokens": None}, {"status": 200, "tokens": "5"}])
+        attempt = apim.wait_for_gateway_propagation(
+            lambda: next(results), ready=lambda r: r["tokens"] is not None, sleep=lambda _: None
+        )
+        self.assertEqual(attempt, 2)
+
+    def test_raises_with_observed_statuses_after_last_attempt(self):
+        sleeps = []
+        with self.assertRaisesRegex(RuntimeError, r"after 2 warm-up call\(s\) \(statuses \[404, 401\]\)"):
+            apim.wait_for_gateway_propagation(
+                iter([{"status": 404}, {"status": 401}]).__next__, attempts=2, sleep=sleeps.append
+            )
+        self.assertEqual(len(sleeps), 1)
+
+
 class ApplyIdentityClientIdTests(unittest.TestCase):
     SELF_CLOSING = '<inbound><authentication-managed-identity resource="https://cognitiveservices.azure.com" /></inbound>'
     MULTI_LINE = (

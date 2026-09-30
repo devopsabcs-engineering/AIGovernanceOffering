@@ -67,6 +67,8 @@ Run the baseline and demonstrate sections.
 
 Expected result: one baseline call, then five calls as `claims-portal` and three calls as `analyst-copilot`, each within the session envelope.
 
+Before the baseline, the notebook sends unscored warm-up calls until the new API, subscription, and policy answer through the gateway. A successful warm-up is metered as `claims-portal`, so its provider usage is included in the reconciliation.
+
 ### Exercise 3.5 (Hands-on): Query and reconcile
 
 Run the verify and acceptance sections.

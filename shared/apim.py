@@ -12,7 +12,7 @@ import json as _json
 import re
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import requests
 
@@ -1079,6 +1079,39 @@ def get_gateway_url(subscription_id: str, resource_group: str, apim_name: str) -
         raise RuntimeError(
             f"GET {response.url} returned no APIM gateway URL"
         ) from exc
+
+
+GATEWAY_WARMUP_ATTEMPTS = 18
+GATEWAY_WARMUP_WAIT_SECONDS = 10
+
+
+def wait_for_gateway_propagation(
+    probe: Callable[[], Dict[str, Any]],
+    *,
+    ready: Optional[Callable[[Dict[str, Any]], bool]] = None,
+    attempts: int = GATEWAY_WARMUP_ATTEMPTS,
+    wait_seconds: float = GATEWAY_WARMUP_WAIT_SECONDS,
+    sleep: Callable[[float], None] = time.sleep,
+) -> int:
+    """Warm-up only, never evidence: repeat ``probe()`` until ``ready`` accepts its result.
+
+    APIM applies new APIs, subscriptions, and policies asynchronously, so on a
+    freshly deployed instance the first calls can return 404 (route not live)
+    or 401 (key or policy not live). Returns the attempt that succeeded.
+    """
+    is_ready = ready or (lambda result: result.get("status") == 200)
+    statuses: List[Any] = []
+    for attempt in range(1, attempts + 1):
+        result = probe()
+        statuses.append(result.get("status"))
+        if is_ready(result):
+            return attempt
+        if attempt < attempts:
+            sleep(wait_seconds)
+    raise RuntimeError(
+        f"The gateway was not ready after {attempts} warm-up call(s) (statuses {statuses}). "
+        "Wait a minute for APIM to apply the new API, subscription, and policy, then re-run this cell."
+    )
 
 
 def get_subscription_key(

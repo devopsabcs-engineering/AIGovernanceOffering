@@ -66,6 +66,8 @@ Pour utiliser un ensemble approuvé sans modifier le code, définissez `DEMO3_FI
 
 Ouvrez `notebooks/demo3-content-safety.ipynb` et exécutez la matrice de tests.
 
+La cellule de la matrice envoie d'abord des appels de préchauffage non notés jusqu'à ce que la nouvelle API, l'abonnement et la stratégie répondent par la passerelle, car APIM applique la nouvelle configuration de façon asynchrone.
+
 Résultat attendu : l'invite d'affaires sûre renvoie `200` et consigne `demo3.safe_prompt`. L'attaque d'invite renvoie `403` avec une provenance de sécurité du contenu et consigne `demo3.prompt_shield_block`. La ligne du seuil de préjudice est présentée pour discussion et peut indiquer **NOT TRIPPED**.
 
 Une ligne **NOT TRIPPED** signifie que la donnée de test a obtenu un score inférieur au seuil. Les réponses approuvées consistent à utiliser une donnée d'évaluation préapprouvée ou à abaisser la valeur `CONTENT_SAFETY_THRESHOLD_*` concernée pour la démonstration seulement.
