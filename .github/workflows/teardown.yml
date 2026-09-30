@@ -113,6 +113,8 @@ jobs:
           echo "accounts stay recoverable for 48 hours; the Log Analytics workspace for 14 days."
           echo "Only an approved operator may purge, from an interactive terminal outside GitHub"
           echo "Actions, with typed confirmation of each inventoried name. See docs/labs/lab-07-teardown.md."
+          echo "Teardown keeps the empty resource groups and the APIM identity. To remove them, an administrator"
+          echo "runs scripts/decommission-lab.ps1 (dry run unless -Execute) from an interactive terminal."
 
   lock-test:
     name: lock rehearsal (no environment, no Azure)

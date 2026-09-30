@@ -14,6 +14,7 @@ ROLES = ROOT / "scripts" / "roles"
 GATEWAY_POLICY = POLICIES / "platform-ai-gateway.xml"
 PRODUCT_POLICY = POLICIES / "platform-team-product.xml"
 BOOTSTRAP = ROOT / "scripts" / "bootstrap-lab.ps1"
+DECOMMISSION = ROOT / "scripts" / "decommission-lab.ps1"
 
 GUID = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
 LONG_HEX = re.compile(r"\b[0-9a-fA-F]{32,}\b")
@@ -231,6 +232,34 @@ class BootstrapScriptTests(unittest.TestCase):
 
     def test_federated_subject_honors_immutable_prefix(self):
         self.assertIn("$customization.sub_claim_prefix):environment:$GitHubEnvironment", self.script)
+
+
+class DecommissionScriptTests(unittest.TestCase):
+    def setUp(self):
+        self.script = DECOMMISSION.read_text(encoding="utf-8")
+
+    def test_dry_run_by_default_and_admin_only(self):
+        self.assertIn("[CmdletBinding(SupportsShouldProcess)]", self.script)
+        self.assertIn("[switch]$Execute", self.script)
+        self.assertIn("if ($Execute -and $refused.Count -eq 0 -and $PSCmdlet.ShouldProcess(", self.script)
+        self.assertIn("$env:GITHUB_ACTIONS -eq 'true'", self.script)
+
+    def test_refuses_unowned_locked_or_nonempty_groups(self):
+        self.assertIn("$OwnerValue = 'aigov-lab'", self.script)
+        self.assertIn("'lock', 'list'", self.script)
+        self.assertIn("unexpected resource(s)", self.script)
+        self.assertIn("-AllowedResourceId $IdentityResourceId", self.script)
+        self.assertRegex(self.script, r"Test-ResourceGroup -Name \$LabResourceGroup\)")
+
+    def test_exports_manifest_records_and_never_purges(self):
+        self.assertIn("manifest-records.json", self.script)
+        self.assertLess(self.script.index("manifest-records.json"), self.script.index("'group', 'delete'"))
+        self.assertNotIn("'--method', 'delete'", self.script.lower())
+        self.assertNotIn("purge --execute", self.script)
+
+    def test_never_touches_identities_roles_or_github(self):
+        for forbidden in ("'ad', 'app'", "'role', 'assignment', 'delete'", "'role', 'definition'", "gh "):
+            self.assertNotIn(forbidden, self.script)
 
 
 if __name__ == "__main__":

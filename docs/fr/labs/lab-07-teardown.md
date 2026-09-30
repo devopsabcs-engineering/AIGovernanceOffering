@@ -89,6 +89,19 @@ Résultat attendu : les artefacts de démonstration sont retirés et l'instance 
 > [!NOTE]
 > Preuves en attente d'examen. Les images `lab07-teardown-summary.png` (réussite) ou `lab07-teardown-status.png` (tout autre état) sont produites à partir de l'état du rapport résiduel et n'apparaissent ici qu'après qu'une personne responsable a examiné les preuves expurgées de la session. Un état d'exposition résiduelle est publié sous forme de carte d'état, jamais sous forme d'image de réussite.
 
+### Exercice 7.7 : Mettre le laboratoire hors service (administration seulement)
+
+Le démontage conserve les groupes de ressources vides et l'identité afin que la session suivante puisse déployer sans nouveaux droits d'administration. Pour retirer complètement le laboratoire, une personne administratrice exécute l'inverse de l'amorçage depuis un terminal interactif, après un démontage exécuté :
+
+```powershell
+./scripts/decommission-lab.ps1 -SubscriptionId <subscription-id>
+./scripts/decommission-lab.ps1 -SubscriptionId <subscription-id> -Execute
+```
+
+Résultat attendu : l'exécution à blanc liste les deux groupes de ressources, les enregistrements de manifeste à exporter et les ressources supprimées de manière réversible restantes. Avec `-Execute`, le script exporte les enregistrements de manifeste dans `outputs/decommission/<timestamp>/`, puis supprime le groupe de ressources du laboratoire (avec ses attributions de rôles) et le groupe de ressources d'identité (avec l'identité attribuée par l'utilisateur d'APIM). Utilisez `-KeepIdentity` pour conserver l'identité. Le script refuse un groupe qui n'a pas l'étiquette de propriété de l'amorçage, qui porte un verrou ou qui contient autre chose que ce que l'amorçage a créé, et il refuse de s'exécuter dans GitHub Actions.
+
+La purge lit les enregistrements de manifeste du groupe de ressources du laboratoire; exécutez donc toute purge nécessaire d'abord. Sinon, les ressources supprimées de manière réversible expirent d'elles-mêmes. Les inscriptions d'applications, les rôles personnalisés ainsi que l'environnement et les variables GitHub demeurent. Exécutez de nouveau `scripts/bootstrap-lab.ps1 -Execute` pour rétablir le laboratoire, puis lancez la session suivante avec une nouvelle valeur `AIGOV_GENERATION`.
+
 ## Liste de vérification
 
 * [ ] Une exécution à blanc a listé les cibles exactes avant toute suppression

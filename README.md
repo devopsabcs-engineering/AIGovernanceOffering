@@ -191,6 +191,12 @@ notebooks headlessly:
   exposure, including soft-deleted resources. It never purges; purge is a
   human-only `scripts/lab_session.py purge --execute` operation with typed
   confirmation of every name.
+- To remove the lab completely, an administrator runs
+  `scripts/decommission-lab.ps1` (a dry run unless `-Execute` is passed)
+  after an executed teardown. It exports the manifest records, then deletes
+  the empty lab resource group and the identity resource group with the APIM
+  user-assigned identity (`-KeepIdentity` keeps them). Re-run the bootstrap
+  to restore the lab, and use a new `AIGOV_GENERATION` for the next session.
 
 LLM message logging stays off in every mode, so no prompts or completions are
 recorded in telemetry. See
@@ -216,6 +222,7 @@ infra/
   modules/                     # monitoring, ai, apim, platform-api
 scripts/
   bootstrap-lab.ps1            # administrator bootstrap (dry run unless -Execute)
+  decommission-lab.ps1         # administrator decommission of the lab and identity resource groups (dry run unless -Execute)
   lab_session.py               # session orchestrator (deploy, readiness, notebooks, cleanup, purge)
   generate_traffic.py          # bounded team traffic for showback
   showback_report.py           # estimated model-token showback

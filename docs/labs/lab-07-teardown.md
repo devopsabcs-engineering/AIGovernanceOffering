@@ -88,6 +88,19 @@ Expected result: the demonstration artifacts are removed and the APIM instance r
 > [!NOTE]
 > Evidence pending review. The images `lab07-teardown-summary.png` (passed) or `lab07-teardown-status.png` (any other state) are rendered from the residual report status and appear here only after a maintainer reviews the sanitized session evidence. A residual-exposure state is published as a status card, never as a success image.
 
+### Exercise 7.7: Decommission the lab (administrator only)
+
+Teardown keeps the empty resource groups and the identity so the next session can deploy without new administrator rights. To remove the lab completely, an administrator runs the inverse of the bootstrap from an interactive terminal after an executed teardown:
+
+```powershell
+./scripts/decommission-lab.ps1 -SubscriptionId <subscription-id>
+./scripts/decommission-lab.ps1 -SubscriptionId <subscription-id> -Execute
+```
+
+Expected result: the dry run lists both resource groups, the manifest records to export, and the remaining tombstones. With `-Execute`, the script exports the manifest records to `outputs/decommission/<timestamp>/`, then deletes the lab resource group (with its role assignments) and the identity resource group (with the APIM user-assigned identity). Use `-KeepIdentity` to keep the identity. The script refuses a group that lacks the bootstrap ownership tag, holds a lock, or holds anything other than what the bootstrap created, and it refuses to run in GitHub Actions.
+
+Purge reads the manifest records in the lab resource group, so run any needed purge first; the tombstones otherwise expire on their own. App registrations, custom roles, and the GitHub environment and variables remain. Re-run `scripts/bootstrap-lab.ps1 -Execute` to restore the lab, then start the next session with a new `AIGOV_GENERATION`.
+
 ## Validation Checklist
 
 * [ ] A dry run listed exact targets before any deletion
