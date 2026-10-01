@@ -54,7 +54,37 @@ az bicep build --file infra/main.bicep
 az bicep build-params --file infra/main.bicepparam
 ```
 
-Expected result: `az bicep build` succeeds without credentials and with no warnings other than documented suppressions. `az bicep build-params` succeeds only after every `AIGOV_*` variable listed in `infra/README.md` is set in your shell; until then it fails and names the missing variable, so no model, region, or identity is ever guessed from source control.
+Expected result: `az bicep build` succeeds without credentials and with no warnings other than documented suppressions. `az bicep build-params` succeeds only after every `AIGOV_*` variable listed in `infra/README.md` is set in your shell; until then it fails with `BCP427` and names the missing variable, so no model, region, or identity is ever guessed from source control.
+
+To load the approved values into your shell, copy them from the repository variables the bootstrap and environment setup already wrote:
+
+```powershell
+gh variable list --json name,value | ConvertFrom-Json |
+    Where-Object name -like 'AIGOV_*' |
+    ForEach-Object { Set-Item "env:$($_.name)" $_.value }
+az bicep build-params --file infra/main.bicepparam
+```
+
+Without GitHub access, set the variables directly. The model tuple below is the reference lab tuple; replace the bracketed values with the output of `scripts/bootstrap-lab.ps1`:
+
+```powershell
+$env:AIGOV_ENVIRONMENT_NAME          = 'lab'
+$env:AIGOV_GENERATION                = 'g01'
+$env:AIGOV_NAME_SUFFIX               = '<name-suffix>'
+$env:AIGOV_LOCATION                  = 'canadaeast'
+$env:AIGOV_AI_LOCATION               = 'canadaeast'
+$env:AIGOV_CONTENT_SAFETY_LOCATION   = 'canadaeast'
+$env:AIGOV_PUBLISHER_EMAIL           = '<publisher-email>'
+$env:AIGOV_PUBLISHER_NAME            = 'AI Governance Lab'
+$env:AIGOV_APIM_IDENTITY_RESOURCE_ID = '/subscriptions/<subscription-id>/resourceGroups/rg-aigov-lab-identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-aigov-apim-lab'
+$env:AIGOV_APIM_IDENTITY_CLIENT_ID   = '<apim-identity-client-id>'
+$env:AIGOV_CHAT_MODEL_NAME           = 'gpt-4.1-mini'
+$env:AIGOV_CHAT_MODEL_VERSION        = '2025-04-14'
+$env:AIGOV_CHAT_DEPLOYMENT_SKU       = 'Standard'
+$env:AIGOV_CHAT_DEPLOYMENT_CAPACITY  = '30'
+$env:AIGOV_ALLOW_GLOBAL_PROCESSING   = 'false'
+az bicep build-params --file infra/main.bicepparam
+```
 
 Compilation proves the templates are well formed. It does not prove quota, capacity, model eligibility, or that the policies behave as intended.
 
