@@ -167,6 +167,32 @@ La préparation interroge la passerelle, la relecture de l'enregistreur et du di
 
 ![Résultats des objectifs de l'atelier 00 pour la session examinée]({{ '/assets/images/lab00-environment-summary.png' | relative_url }})
 
+Pour afficher les mêmes tableaux pour votre propre session, téléchargez ses preuves assainies et affichez-les :
+
+```powershell
+# Dernière exécution de lab-session
+./scripts/show-evidence.ps1
+
+# Une exécution précise, avec ouverture des fichiers PNG générés
+./scripts/show-evidence.ps1 -RunId <id-execution> -OpenPng
+```
+
+Le script télécharge les artefacts de l'exécution dans un dossier temporaire avec `gh run download`, lit `evidence.json`, puis affiche les vérifications de préparation et l'état de chaque atelier. Il lit uniquement des preuves assainies et ne requiert aucune information d'identification Azure.
+
+```text
+check                    status attempts
+-----                    ------ --------
+content_safety_account   passed        1
+custom_metric_dimensions passed        1
+diagnostic               passed        1
+gateway                  passed        1
+inference                passed        1
+logger                   passed        1
+metric_ingestion         passed       15
+```
+
+Résultat attendu : après une session `deploy-only`, `lab00-environment` est `passed`, les ateliers 01 à 06 sont `not_run` et `lab07-teardown` est `kept`. Lancez `run-existing` avec la même génération pour produire les résultats des autres ateliers.
+
 ## Liste de vérification
 
 * [ ] L'ensemble de paramètres du modèle et la génération sont explicites et approuvés

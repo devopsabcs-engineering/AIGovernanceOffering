@@ -166,6 +166,32 @@ Readiness polls the gateway, the logger and diagnostic readback including custom
 
 ![Objective results for Lab 00 from the reviewed session]({{ '/assets/images/lab00-environment-summary.png' | relative_url }})
 
+To view the same tables for your own session, download its sanitized evidence and print it:
+
+```powershell
+# Latest lab-session run
+./scripts/show-evidence.ps1
+
+# A specific run, and open the rendered PNG files
+./scripts/show-evidence.ps1 -RunId <run-id> -OpenPng
+```
+
+The script downloads the run artifacts to a temporary folder with `gh run download`, reads `evidence.json`, and prints the readiness checks and the status of each lab. It reads sanitized evidence only and needs no Azure credentials.
+
+```text
+check                    status attempts
+-----                    ------ --------
+content_safety_account   passed        1
+custom_metric_dimensions passed        1
+diagnostic               passed        1
+gateway                  passed        1
+inference                passed        1
+logger                   passed        1
+metric_ingestion         passed       15
+```
+
+Expected result: after a `deploy-only` session, `lab00-environment` is `passed`, Labs 01 to 06 are `not_run`, and `lab07-teardown` is `kept`. Run `run-existing` with the same generation to produce results for the other labs.
+
 ## Validation Checklist
 
 * [ ] The model tuple and generation are explicit and approved
