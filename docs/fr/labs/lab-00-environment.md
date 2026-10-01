@@ -110,6 +110,20 @@ Résultat attendu : vous pouvez nommer les modes qui conservent les ressources e
 gh workflow run lab-session.yml -f mode=dry-run -f generation=<generation> -f confirm_resource_group=<groupe-de-ressources>
 ```
 
+Chaque session cible le groupe de ressources existant créé par l'amorçage (`rg-aigov-lab` par défaut), lu dans la variable de dépôt `AIGOV_LAB_RESOURCE_GROUP`. Aucune entrée ne permet de choisir un autre groupe de ressources; `confirm_resource_group` est une vérification de sécurité qui doit correspondre exactement à ce nom.
+
+Choisissez une génération qu'aucune session antérieure n'a utilisée. Une session démantelée laisse des noms APIM, Cognitive Services et Log Analytics supprimés de manière réversible; la réutilisation de sa génération fait donc échouer la vérification préalable avec `tombstone_collision`. Listez les générations antérieures avec :
+
+```powershell
+gh run list --workflow lab-session.yml --limit 20 --json displayTitle,conclusion,createdAt
+```
+
+Par exemple, lorsque `g03` était la dernière génération :
+
+```powershell
+gh workflow run lab-session.yml -f mode=dry-run -f generation=g04 -f confirm_resource_group=rg-aigov-lab
+```
+
 Résultat attendu : après qu'une personne réviseure a approuvé l'environnement `lab`, la session se connecte avec l'identité de déploiement, exécute la vérification préalable et what-if, puis s'arrête. Aucun enregistrement de manifeste, aucun déploiement ni aucun nettoyage n'a lieu.
 
 La vérification préalable contrôle l'ensemble de paramètres du modèle, l'inscription des fournisseurs, la disponibilité régionale d'API Management, le quota du modèle, la disponibilité de Content Safety ainsi que les noms APIM, Cognitive Services et Log Analytics supprimés de manière réversible qui entreraient en collision. L'analyse what-if échoue en cas de suppression inattendue ou de modification hors des identifiants de ressources prévus.
@@ -117,6 +131,30 @@ La vérification préalable contrôle l'ensemble de paramètres du modèle, l'in
 ### Exercice 0.5 (pratique) : Déployer et lire la préparation
 
 Lancez une exécution `full-session` ou `deploy-only` avec les mêmes entrées, puis approuvez-la. Ces modes, comme `run-existing`, refusent de démarrer tant que la variable de dépôt `AIGOV_PRICE_SNAPSHOT` ne désigne pas un fichier d'instantané de prix approuvé sous `scripts/prices/`.
+
+Pour déployer une fois, puis exécuter les ateliers sur l'environnement conservé :
+
+```powershell
+# Déployer et conserver l'environnement; le nettoyage s'exécute seulement si le déploiement ou la préparation échoue
+gh workflow run lab-session.yml -f mode=deploy-only -f generation=g04 -f confirm_resource_group=rg-aigov-lab
+
+# Exécuter les carnets et le trafic sur la même génération; ne supprime jamais de ressources
+gh workflow run lab-session.yml -f mode=run-existing -f generation=g04 -f confirm_resource_group=rg-aigov-lab
+```
+
+Pour déployer, exécuter et conserver les ressources en une seule session, utilisez `-f mode=full-session -f keep_environment=true`. Les ressources conservées continuent d'engendrer des coûts jusqu'au démantèlement.
+
+Lorsque `-f generation` est omis, la session utilise la variable de dépôt `AIGOV_GENERATION`. Définissez-la sur la génération déployée pour que les exécutions `run-existing` et `report-only` ultérieures trouvent le manifeste :
+
+```powershell
+gh variable set AIGOV_GENERATION --body g04
+```
+
+Chaque exécution attend qu'une personne réviseure approuve l'environnement `lab` sur la page de l'exécution. Pour suivre la dernière exécution :
+
+```powershell
+gh run watch (gh run list --workflow lab-session.yml --limit 1 --json databaseId -q '.[0].databaseId')
+```
 
 Résultat attendu : la session écrit un enregistrement de manifeste en ajout seulement, nommé `aigov-manifest-<generation>-<session_id>-<hash8>`, avant toute modification, déploie en mode incrémentiel et écrit `outputs/readiness/<session_id>/summary.json` avec un état par vérification.
 

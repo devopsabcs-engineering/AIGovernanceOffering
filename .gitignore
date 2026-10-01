@@ -11,3 +11,6 @@ _site/
 .sass-cache/
 .jekyll-cache/
 docs/Gemfile.lock
+# az bicep build output; deployments compile main.bicep directly
+infra/*.json
+infra/modules/*.json
