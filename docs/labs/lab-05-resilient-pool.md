@@ -60,6 +60,8 @@ Expected result: each unchanged client call shows its serving member in `x-serve
 
 The ratio is approximate. A small sample never promises an exact distribution, but an unknown or missing `x-served-by` value, a `404`, or an unexpected status fails the phase.
 
+The gateway occasionally stalls a single mock call, especially right after a configuration change. The notebook then prints `A mock pool call timed out after 30s; retrying once.` and sends the same request again as a separately budgeted attempt. One such message is expected noise; a second timeout on the retry stops the cell, and you can rerun it.
+
 ### Exercise 5.4 (Hands-on): Fault a member and spill over
 
 Run the FAULT section.
@@ -77,6 +79,22 @@ Expected result: after the breaker period expires, East appears again in `x-serv
 ### Exercise 5.6: Confirm the mock credential is enforced
 
 Expected result: a direct call to the mock API without its credential is rejected. This negative probe records `demo4.mock_auth_enforced`. The mock is never made anonymous to fix routing.
+
+After the last cell, confirm the recorded objectives in a terminal:
+
+```powershell
+./scripts/show-results.ps1 -Notebook demo4-resilient-pool
+```
+
+```text
+notebook             objective                status
+--------             ---------                ------
+demo4-resilient-pool demo4.alternate_routing  passed
+demo4-resilient-pool demo4.fault_observed     passed
+demo4-resilient-pool demo4.mock_auth_enforced passed
+demo4-resilient-pool demo4.recovery           passed
+demo4-resilient-pool demo4.routing_paths      passed
+```
 
 ### Exercise 5.7: Review the session evidence
 

@@ -83,6 +83,20 @@ The streaming objective is observational: whether the model's own completion cro
 
 When the outbound policy detects a violation in a stream, APIM stops forwarding further events instead of returning `403`.
 
+After the last cell, confirm the recorded objectives in a terminal:
+
+```powershell
+./scripts/show-results.ps1 -Notebook demo3-content-safety
+```
+
+```text
+notebook             objective                 status
+--------             ---------                 ------
+demo3-content-safety demo3.prompt_shield_block passed
+demo3-content-safety demo3.safe_prompt         passed
+demo3-content-safety demo3.stream_intervention inconclusive
+```
+
 ### Exercise 4.5: Review the session evidence
 
 > [!NOTE]

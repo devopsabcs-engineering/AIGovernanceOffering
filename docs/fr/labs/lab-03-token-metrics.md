@@ -81,6 +81,21 @@ Le délai d'ingestion est normal; la requête interroge donc avec un intervalle 
 > [!NOTE]
 > Pour les réponses en continu, demandez l'utilisation au fournisseur avec `stream_options: {"include_usage": true}` lorsque c'est pris en charge. Un flux interrompu peut produire des comptes incomplets, car l'événement final d'utilisation peut ne jamais arriver. Le flux principal utilise des appels sans diffusion en continu pour que les comptes se rapprochent.
 
+Après la dernière cellule, confirmez les objectifs consignés dans un terminal :
+
+```powershell
+./scripts/show-results.ps1 -Notebook demo2-token-metrics
+```
+
+```text
+notebook            objective                 status
+--------            ---------                 ------
+demo2-token-metrics demo2.dimensions_observed passed
+demo2-token-metrics demo2.logger_configured   passed
+demo2-token-metrics demo2.metrics_reconciled  passed
+demo2-token-metrics demo2.no_message_capture  passed
+```
+
 ### Exercice 3.6 : Examiner les preuves de la session
 
 > [!NOTE]

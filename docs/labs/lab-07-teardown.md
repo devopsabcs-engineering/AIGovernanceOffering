@@ -40,27 +40,56 @@ By the end of this lab, you will be able to:
 ### Exercise 7.1 (Hands-on): Run a teardown dry run
 
 ```powershell
+./scripts/run-lab-workflow.ps1 -Mode teardown-plan
+```
+
+The script targets the active generation, opens the run page for approval (**Review deployments** > **lab** > **Approve and deploy**), waits for the result, and prints the plan from the job log. The equivalent raw command is:
+
+```powershell
 gh workflow run teardown.yml -f confirm_resource_group=<resource-group> -f generation=<generation>
 ```
 
-Expected result: after environment approval, the job loads the newest valid manifest record for the generation, verifies its hash, and lists the exact planned targets, distinguishing active resources from tombstones. Nothing is deleted.
+Expected result: the job loads the newest valid manifest record for the generation, verifies its hash, and lists the exact planned targets, distinguishing active resources from tombstones. Nothing is deleted.
+
+```text
+cleanup: target microsoft.cognitiveservices/accounts/deployments chat: would_delete
+cleanup: target microsoft.apimanagement/service apim-aigov-lab-g05-001-<suffix>: would_delete
+...
+cleanup: status=dry_run action=dry_run active=7 failures=0 tombstones=0 exposure=continuing
+```
 
 A tenant, subscription, or resource group mismatch, an unexpected resource, ambiguous ownership, or a lock stops the run. Locks are never removed automatically.
 
 ### Exercise 7.2 (Hands-on): Execute the teardown
 
+Run the interactive cleanup in [Exercise 7.5](#exercise-75-clean-up-interactive-notebook-artifacts) first if you want to see it work; the teardown deletes the APIM instance either way.
+
+```powershell
+./scripts/run-lab-workflow.ps1 -Mode teardown
+```
+
+The equivalent raw command is:
+
 ```powershell
 gh workflow run teardown.yml -f confirm_resource_group=<resource-group> -f generation=<generation> -f execute=true
 ```
 
-Expected result: model deployments are deleted first to release quota, then the remaining owned resources in dependency order. The empty lab resource group, the identity resource group with the APIM user-assigned identity, and the manifest records are kept.
+Expected result: model deployments are deleted first to release quota, then the remaining owned resources in dependency order. The empty lab resource group, the identity resource group with the APIM user-assigned identity, and the manifest records are kept. Afterwards the script lists the generations, where the torn-down one shows `torn down`, and `./scripts/sync-lab-env.ps1` reports `No active generation` until you deploy again.
 
 Each target is processed independently with bounded retries. A confirmed `404` means absent; a `403`, a timeout, or a discovery failure is an error, not a success.
 
 ### Exercise 7.3: Read the residual report
 
+The teardown job writes the residual report to `outputs/residual/<session_id>/report.json` on the runner and logs one line per target, one per tombstone, and a summary. `run-lab-workflow.ps1` prints those lines; to print them again for any teardown run:
+
 ```powershell
-Get-Content outputs/residual/<session_id>/report.json
+gh run view <run-id> --log | Select-String 'cleanup: '
+```
+
+```text
+cleanup: target microsoft.apimanagement/service apim-aigov-lab-g05-001-<suffix>: deleted
+cleanup: tombstone apim apim-aigov-lab-g05-001-<suffix> scheduled purge 2026-10-05T...
+cleanup: status=clean action=deleted active=0 failures=0 tombstones=4 exposure=none_known
 ```
 
 Expected result: the report lists active resources, soft-deleted tombstones, failed actions, quota-release status, and known or unknown continuing exposure. Expected tombstones of owned resources are listed separately and do not fail the run; any active owned resource, unexpected resource, or failed deletion produces a non-success exit.

@@ -46,21 +46,52 @@ Get-Content policies/platform-team-product.xml
 
 Expected result: the platform policy emits one token metric with the dimensions `API ID`, `Subscription ID`, and `ClientApp`, normalizes `ClientApp` against the allowlist `retail-web`, `finance-batch`, and `hr-assistant`, reporting any other value as `unknown`, and deletes the `Ocp-Apim-Subscription-Key` header, the `subscription-key` query parameter, and any `api-key` header before forwarding. The team product policy applies `llm-token-limit` with a `counter-key` of the subscription ID.
 
-### Exercise 6.2: Understand the traffic envelope
+### Exercise 6.2 (Hands-on): Run the bounded traffic session
 
-Traffic runs inside a `full-session` or `run-existing` session after readiness and scope probes pass.
+Traffic runs inside a `full-session` or `run-existing` session after readiness and scope probes pass. Start a `run-existing` session against the generation you deployed in Lab 00:
 
-Expected result: you can state the defaults: one worker, 30 attempts, 128 maximum output tokens, 10,000 reserved tokens, a five-minute deadline, serial non-streaming calls, and no retries. Keys are retrieved privately and never printed, and every call reserves against the session envelope.
+```powershell
+./scripts/run-lab-workflow.ps1 -Mode run-existing
+```
+
+Approve the run on the page that opens. The session reruns the five notebooks headlessly, sends the team traffic, writes the showback report, and never deletes resources. It takes about 15 minutes, and the script then prints the evidence.
+
+Expected result: every lab from `lab00-environment` to `lab06-chargeback` is `passed`, and `lab07-teardown` is `not_run`. You can state the traffic defaults: one worker, 30 attempts, 128 maximum output tokens, 10,000 reserved tokens, a five-minute deadline, serial non-streaming calls, and no retries. Keys are retrieved privately and never printed, and every call reserves against the session envelope.
 
 The generator records a response-usage manifest and a fixed half-open UTC window in `outputs/showback/<session_id>/manifest.json`. A workflow lock does not stop human traffic, so a window that contains unaccounted calls is rejected as contaminated.
 
 ### Exercise 6.3: Read the showback report
+
+The evidence the script printed ends with the showback. To print it again for the latest session:
+
+```powershell
+./scripts/show-evidence.ps1
+```
+
+```text
+Estimated model-token showback (USD retail) | 2026-10-03T09:25:00Z to 2026-10-03T09:27:00Z (half-open UTC)
+coverage complete | reconciliation reconciled | snapshot retail-2026-09-29-gpt-4.1-mini-canadaeast
+
+team         prompt_tokens completion_tokens estimated_usd
+----         ------------- ----------------- -------------
+team-finance           190               155 0.00039204
+team-hr                180               221 0.000514976
+team-retail            190               237 0.000550792
+
+total estimated_usd 0.001457808 (complete)
+```
 
 Expected result: the report queries one representation only, the Application Insights `customMetrics` table summed by `valueSum`, scoped to the component, the observed metric namespace, the platform API, the three teams, and the window. It reconciles prompt and completion sums against the manifest within an explicit tolerance and prices them with exactly one rate per model, version, SKU, region, currency, effective period, and unit from `scripts/prices/<snapshot>.json`.
 
 A report with complete coverage shows totals. A report with partial coverage labels known values as partial. A report with missing usage, attribution, or prices suppresses the total and records the unattributed, unpriced, failed, and ambiguous counts.
 
 ### Exercise 6.4 (Hands-on): Run a report-only session
+
+```powershell
+./scripts/run-lab-workflow.ps1 -Mode report-only
+```
+
+Without a window, the script reuses the interval from the latest successful `run-existing` or `full-session` session. To choose your own window, pass `-WindowStart 2026-10-03T09:00:00Z -WindowEnd 2026-10-03T10:00:00Z`. The equivalent raw command is:
 
 ```powershell
 gh workflow run lab-session.yml -f mode=report-only -f generation=<generation> -f confirm_resource_group=<resource-group> -f report_window_start=<start-utc> -f report_window_end=<end-utc>

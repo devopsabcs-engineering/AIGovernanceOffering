@@ -91,12 +91,18 @@ jupyter notebook
 > APIM resource scope. Re-run `pip install -r requirements.txt` and restart
 > your Jupyter kernel so the dependency set is picked up.
 
-1. Open and run **`notebooks/00-setup-and-validation.ipynb`** first. It
+1. If you deployed the lab environment with the `lab-session` workflow
+   ([Lab 00](docs/labs/lab-00-environment.md)), run
+   `./scripts/sync-lab-env.ps1` first. It writes `.env` from the deployed
+   generation's outputs and clears stale shell variables, so no notebook
+   prompts you. Run it again after every deployment or teardown.
+2. Open and run **`notebooks/00-setup-and-validation.ipynb`**. It
    confirms your `az login` session, lets you pick/confirm a subscription,
-   prompts for your resource group and APIM instance name, validates
-   connectivity, and persists everything to a local `.env` file (never
-   committed) so subsequent notebooks run non-interactively.
-2. Open a demo notebook from the table below.
+   prompts for your resource group and APIM instance name when `.env` lacks
+   them, validates connectivity, and persists everything to a local `.env`
+   file (never committed) so subsequent notebooks run non-interactively.
+3. Open a demo notebook from the table below. `./scripts/show-results.ps1`
+   prints the objective status of your latest run of each notebook.
 
 Configuration precedence in every notebook is: **environment variables**
 &rarr; **`.env` file** &rarr; **interactive prompt** (with the answer
@@ -223,7 +229,11 @@ infra/
 scripts/
   bootstrap-lab.ps1            # administrator bootstrap (dry run unless -Execute)
   decommission-lab.ps1         # administrator decommission of the lab and identity resource groups (dry run unless -Execute)
-  lab_session.py               # session orchestrator (deploy, readiness, notebooks, cleanup, purge)
+  lab_session.py               # session orchestrator (deploy, readiness, notebooks, cleanup, purge, generations, local-env)
+  run-lab-workflow.ps1         # start, approve, and follow a lab-session or teardown run with the right generation
+  sync-lab-env.ps1             # write .env from the deployed generation and clear stale shell variables
+  show-results.ps1             # objective status of your latest run of each notebook
+  show-evidence.ps1            # sanitized evidence tables of a lab-session run
   generate_traffic.py          # bounded team traffic for showback
   showback_report.py           # estimated model-token showback
   check_notebook_outputs.py    # notebook completion and objective checker

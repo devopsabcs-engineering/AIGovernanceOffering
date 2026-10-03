@@ -22,7 +22,7 @@ nav_order: 11
 
 `notebooks/00-setup-and-validation.ipynb` is the shared prerequisite for every demonstration notebook. It confirms your Azure CLI identity, captures the resource group and APIM instance name, verifies that the gateway is reachable, reports the SKU, and checks the Content Safety resource that Lab 04 needs. It creates or modifies no Azure resources.
 
-Interactively, the notebook prompts for missing values and persists them to a local `.env` file that is never committed. In an automated session, `scripts/lab_session.py write-env` writes the complete `.env` from the deployment outputs, and `AIGOV_HEADLESS=1` turns every would-be prompt into an error that names the missing key.
+Interactively, the notebook reads a local `.env` file that is never committed. `./scripts/sync-lab-env.ps1` writes that file from the deployment outputs of the generation that is deployed right now, so you never type a resource name. Without a deployed lab, the notebook prompts for missing values and persists them to `.env` instead. In an automated session, `scripts/lab_session.py write-env` writes the complete `.env`, and `AIGOV_HEADLESS=1` turns every would-be prompt into an error that names the missing key.
 
 ## Learning Objectives
 
@@ -38,6 +38,8 @@ By the end of this lab, you will be able to:
 
 ### Exercise 1.1: Prepare the Python environment
 
+From the repository root:
+
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
@@ -50,41 +52,84 @@ Expected result: the last command prints the subscription you intend to use.
 
 The notebooks use `AzureCliCredential` and fall back to `DefaultAzureCredential`. They never open an interactive browser sign-in.
 
-### Exercise 1.2 (Hands-on): Run the setup notebook
+### Exercise 1.2 (Hands-on): Point `.env` at the deployed generation
+
+```powershell
+./scripts/sync-lab-env.ps1
+```
+
+Expected result:
+
+```text
+Subscription: <your subscription>
+local-env: wrote 39 keys to .env for generation g05 (secrets not shown)
+local-env: APIM apim-aigov-lab-g05-001-<suffix> at https://apim-aigov-lab-g05-001-<suffix>.azure-api.net
+Cleared from this terminal: AIGOV_GENERATION
+Ready: .env and this terminal now target generation g05. Restart Jupyter if it was already running.
+```
+
+The script finds the newest generation whose APIM instance exists, writes `.env` from that deployment's outputs, and saves any previous `.env` as `.env.bak`. It then removes from the current terminal any variable that would override or conflict with `.env`, such as the `AIGOV_*` values loaded in Lab 00 or `AIGOV_HEADLESS` and `SESSION_*` values from an automated session. It also warns when the repository variable `AIGOV_GENERATION` names a different generation.
+
+VS Code terminals can also start with the values that `.env` held when the terminal opened, because the Python extension may load `.env` into new terminals. That is another way a stale generation reaches a notebook, and the script clears those values as well.
+
+Run it again after every deployment or teardown. If it reports `No active generation`, deploy one first in [Lab 00]({{ prerequisite_url }}).
+
+### Exercise 1.3 (Hands-on): Run the setup notebook
+
+In the same terminal:
 
 ```powershell
 jupyter notebook notebooks/00-setup-and-validation.ipynb
 ```
 
-Run every cell from top to bottom.
+Jupyter opens the notebook in your browser. If the browser shows **File not found** for a `jpserver-<number>-open.html` file, select one of the `http://localhost:8888/...?token=...` links printed in the terminal instead. Keep that terminal open; closing it stops the notebook kernel.
 
-Expected result: the notebook prints the gateway URL and SKU, reports the Content Safety resource check, and persists your answers to `.env`. Secrets such as API keys and subscription keys appear masked, never in full.
+Select **Run** > **Run All Cells**. You can also open the notebook in VS Code, select the `.venv` interpreter as the kernel, and select **Run All**.
+
+Expected result: the notebook prints the lab generation, the gateway URL, and the SKU, and reports the Content Safety resource check. Secrets such as API keys and connection strings appear masked, never in full.
+
+If cell 3 reports that the APIM instance does not exist, `.env` points to a generation that was torn down. Stop Jupyter with Ctrl+C, run `./scripts/sync-lab-env.ps1`, start Jupyter again, and select **Kernel** > **Restart Kernel and Run All Cells**.
 
 Demo 1 and Demo 3 need `llm-token-limit` and `llm-content-safety`, which Basic v2 supports. Demo 4 needs backend pools and circuit breakers, which Basic v2, Standard v2, Premium v2, and classic Standard and Premium support.
 
-### Exercise 1.3: Observe headless behavior
+### Exercise 1.4: Observe headless behavior
+
+Open a second terminal in the repository root, activate the environment, and run:
 
 ```powershell
+.venv\Scripts\Activate.ps1
 $env:AIGOV_HEADLESS = "1"
+python -c "from shared.config import load_config; load_config(); print('headless load_config: OK')"
+$env:AIGOV_GENERATION = "g00"
 python -c "from shared.config import load_config; load_config()"
-Remove-Item Env:AIGOV_HEADLESS
+Remove-Item Env:AIGOV_GENERATION, Env:AIGOV_HEADLESS
 ```
 
-Expected result: with a complete `.env`, the command returns without prompting. With a missing required key, it raises `ConfigError` naming the key. When a key exists in both the process environment and `.env` with different values, it raises and lists key names only, never values.
+Expected result: with a complete `.env` and a clean terminal, the first command prints `headless load_config: OK` without prompting. After you set a different `AIGOV_GENERATION` in the terminal, the second command raises `ConfigError: Inherited environment variables conflict with .env in headless mode: AIGOV_GENERATION`. It lists key names only, never values. With a missing required key, headless mode raises `ConfigError` naming the key.
+
+In interactive mode a terminal variable silently wins over `.env`, which is how a stale value from an earlier session can point a notebook at the wrong resources. Headless mode refuses instead. If you see this error unexpectedly, run `./scripts/sync-lab-env.ps1` in that terminal.
 
 `DEMO_RUN` must come from `.env` alone, so an inherited `DEMO_RUN` environment variable counts as a conflict in headless mode.
 
-### Exercise 1.4: Read the objective results
+### Exercise 1.5: Read the objective results
 
 ```powershell
-Get-ChildItem outputs/results -Recurse -Filter *.json | Select-Object FullName
+./scripts/show-results.ps1 -Notebook 00-setup-and-validation
 ```
 
-Expected result: the setup result file records `setup.identity`, `setup.endpoints`, and `setup.apim_sku`, each with the status `passed`, `failed`, or `inconclusive` and allowlisted scalar evidence only.
+```text
+notebook                objective       status recorded_at
+--------                ---------       ------ -----------
+00-setup-and-validation setup.apim_sku  passed 2026-10-03 8:18:36 AM
+00-setup-and-validation setup.endpoints passed 2026-10-03 8:18:36 AM
+00-setup-and-validation setup.identity  passed 2026-10-03 8:18:28 AM
+```
+
+Expected result: the setup result file records `setup.identity`, `setup.endpoints`, and `setup.apim_sku`, each with the status `passed`, `failed`, or `inconclusive` and allowlisted scalar evidence only. The script reads the newest `outputs/results/<run>/00-setup-and-validation.json`; open that file to see the evidence values. Without `-Notebook`, it prints every notebook, which is how you check Labs 02 to 05.
 
 The banners in the notebook are for people. The result file is the acceptance record that the session checker reads.
 
-### Exercise 1.5: Review the session evidence
+### Exercise 1.6: Review the session evidence
 
 > [!NOTE]
 > Reviewed evidence from session `36608221120-1` ([workflow run](https://github.com/devopsabcs-engineering/AIGovernanceOffering/actions/runs/36608221120)), rendered on 2026-09-29 from sanitized results only.
@@ -94,6 +139,7 @@ The banners in the notebook are for people. The result file is the acceptance re
 ## Validation Checklist
 
 * [ ] `az account show` returns the intended subscription
+* [ ] `sync-lab-env.ps1` reported the deployed generation
 * [ ] The setup notebook printed the gateway URL and SKU
 * [ ] `.env` exists locally and is not tracked by Git
 * [ ] Headless mode fails on a missing key instead of prompting

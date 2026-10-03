@@ -84,6 +84,20 @@ L'objectif de diffusion en continu est observationnel : le fait que la réponse 
 
 Lorsque la stratégie sortante détecte une violation dans un flux, APIM cesse de transmettre les événements suivants au lieu de renvoyer `403`.
 
+Après la dernière cellule, confirmez les objectifs consignés dans un terminal :
+
+```powershell
+./scripts/show-results.ps1 -Notebook demo3-content-safety
+```
+
+```text
+notebook             objective                 status
+--------             ---------                 ------
+demo3-content-safety demo3.prompt_shield_block passed
+demo3-content-safety demo3.safe_prompt         passed
+demo3-content-safety demo3.stream_intervention inconclusive
+```
+
 ### Exercice 4.5 : Examiner les preuves de la session
 
 > [!NOTE]

@@ -69,7 +69,7 @@ Without GitHub access, set the variables directly. The model tuple below is the 
 
 ```powershell
 $env:AIGOV_ENVIRONMENT_NAME          = 'lab'
-$env:AIGOV_GENERATION                = 'g01'
+$env:AIGOV_GENERATION                = '<generation>'
 $env:AIGOV_NAME_SUFFIX               = '<name-suffix>'
 $env:AIGOV_LOCATION                  = 'canadaeast'
 $env:AIGOV_AI_LOCATION               = 'canadaeast'
@@ -88,6 +88,9 @@ az bicep build-params --file infra/main.bicepparam
 
 Compilation proves the templates are well formed. It does not prove quota, capacity, model eligibility, or that the policies behave as intended.
 
+> [!NOTE]
+> These commands leave `AIGOV_*` variables, including `AIGOV_GENERATION`, in your terminal. That is fine for compiling, but a stale `AIGOV_GENERATION` later conflicts with the `.env` file the notebooks use. Lab 01 runs `./scripts/sync-lab-env.ps1`, which clears them; opening a new terminal also works.
+
 ### Exercise 0.3: Choose a session mode
 
 Each mode grants a different authority. Cleanup always acts only on resources recorded by the current session's own manifest.
@@ -105,54 +108,61 @@ Expected result: you can name the mode that preserves resources on failure (`run
 
 ### Exercise 0.4 (Hands-on): Run a dry run
 
+Each deployment uses a new generation, a short label such as `g05` that appears in every resource name. A torn-down session leaves soft-deleted APIM, Cognitive Services, and Log Analytics names behind, so reusing its generation fails preflight with `tombstone_collision`. See which generations exist and which one comes next:
+
+```powershell
+az login
+python scripts/lab_session.py generations
+```
+
+```text
+Lab resource group: rg-aigov-lab
+generation  state            records  last activity (UTC)
+g03         retired                3  2026-09-30T12:45:48
+g04         torn down              3  2026-10-01T19:37:16
+active generation: none
+next unused generation: g05
+```
+
+Start the dry run. The script picks the next unused generation, reads the resource group from the repository variable `AIGOV_LAB_RESOURCE_GROUP`, opens the run page, and follows the run until it ends:
+
+```powershell
+./scripts/run-lab-workflow.ps1 -Mode dry-run
+```
+
+On the run page that opens, select **Review deployments**, check **lab**, and select **Approve and deploy**. Every session waits for this approval.
+
+Every session targets the existing lab resource group created by the bootstrap (`rg-aigov-lab` by default). No input selects another resource group; the workflow input `confirm_resource_group` is a safety check that must match that name exactly. The script fills it in for you. The equivalent raw command is:
+
 ```powershell
 gh workflow run lab-session.yml -f mode=dry-run -f generation=<generation> -f confirm_resource_group=<resource-group>
 ```
 
-Every session targets the existing lab resource group created by the bootstrap (`rg-aigov-lab` by default), read from the repository variable `AIGOV_LAB_RESOURCE_GROUP`. No input selects another resource group; `confirm_resource_group` is a safety check that must match that name exactly.
-
-Choose a generation that no earlier session has used. A torn-down session leaves soft-deleted APIM, Cognitive Services, and Log Analytics names behind, so reusing its generation fails preflight with `tombstone_collision`. List earlier generations with:
-
-```powershell
-gh run list --workflow lab-session.yml --limit 20 --json displayTitle,conclusion,createdAt
-```
-
-For example, when `g03` was the last generation:
-
-```powershell
-gh workflow run lab-session.yml -f mode=dry-run -f generation=g04 -f confirm_resource_group=rg-aigov-lab
-```
-
-Expected result: after a reviewer approves the `lab` environment, the session logs in with the deployment identity, runs preflight and what-if, and stops. No manifest record, deployment, or cleanup occurs.
+Expected result: after approval, the session logs in with the deployment identity, runs preflight and what-if, and stops. No manifest record, deployment, or cleanup occurs.
 
 Preflight checks the model tuple, provider registration, API Management regional availability, model quota, Content Safety availability, and soft-deleted APIM, Cognitive Services, and Log Analytics names that would collide. What-if fails on unexpected deletes or changes outside the planned resource IDs.
 
 ### Exercise 0.5 (Hands-on): Deploy and read readiness
 
-Start a `full-session` or `deploy-only` run with the same inputs and approve it. These modes, like `run-existing`, refuse to start unless the repository variable `AIGOV_PRICE_SNAPSHOT` points to an approved price snapshot file under `scripts/prices/`.
-
-To deploy once and then run the labs against the kept environment:
+Start a `deploy-only` session for the same generation and approve it. Like `full-session` and `run-existing`, it refuses to start unless the repository variable `AIGOV_PRICE_SNAPSHOT` points to an approved price snapshot file under `scripts/prices/`.
 
 ```powershell
-# Deploy and keep the environment; cleanup runs only if deployment or readiness fails
-gh workflow run lab-session.yml -f mode=deploy-only -f generation=g04 -f confirm_resource_group=rg-aigov-lab
-
-# Run notebooks and traffic against the same generation; never deletes resources
-gh workflow run lab-session.yml -f mode=run-existing -f generation=g04 -f confirm_resource_group=rg-aigov-lab
+./scripts/run-lab-workflow.ps1 -Mode deploy-only
 ```
 
-To deploy, run, and keep the resources in one session, use `-f mode=full-session -f keep_environment=true`. Kept resources continue to incur cost until a teardown.
+The dry run created no manifest record, so the script picks the same generation again. Deployment and readiness take about 15 minutes. When the run succeeds, the script:
 
-When `-f generation` is omitted, the session uses the repository variable `AIGOV_GENERATION`. Set it to the generation you deployed so that later `run-existing` and `report-only` runs find the manifest:
+1. Sets the repository variable `AIGOV_GENERATION` to the new generation, so later workflow runs that omit a generation target the right one.
+2. Runs `./scripts/sync-lab-env.ps1`, which writes your local `.env` from the deployment outputs for Lab 01.
+
+A `deploy-only` session keeps the environment; cleanup runs only if deployment or readiness fails. To deploy, run every notebook, and keep the resources in one session, use `-Mode full-session -KeepEnvironment` instead. Kept resources continue to incur cost until a teardown.
+
+The equivalent raw commands are:
 
 ```powershell
-gh variable set AIGOV_GENERATION --body g04
-```
-
-Each run waits for a reviewer to approve the `lab` environment on the run page. To follow the latest run:
-
-```powershell
+gh workflow run lab-session.yml -f mode=deploy-only -f generation=<generation> -f confirm_resource_group=<resource-group>
 gh run watch (gh run list --workflow lab-session.yml --limit 1 --json databaseId -q '.[0].databaseId')
+gh variable set AIGOV_GENERATION --body <generation>
 ```
 
 Expected result: the session writes an append-only manifest record named `aigov-manifest-<generation>-<session_id>-<hash8>` before any mutation, deploys incrementally, and writes `outputs/readiness/<session_id>/summary.json` with one status per check.
@@ -190,7 +200,7 @@ logger                   passed        1
 metric_ingestion         passed       15
 ```
 
-Expected result: after a `deploy-only` session, `lab00-environment` is `passed`, Labs 01 to 06 are `not_run`, and `lab07-teardown` is `kept`. Run `run-existing` with the same generation to produce results for the other labs.
+Expected result: after a `deploy-only` session, `lab00-environment` is `passed`, Labs 01 to 06 are `not_run`, and `lab07-teardown` is `kept`. Labs 01 to 05 run the notebooks yourself against this environment, and Lab 06 starts a `run-existing` session for the automated traffic and report.
 
 ## Validation Checklist
 

@@ -81,6 +81,21 @@ Expected result: a new `DEMO_RUN` value is persisted to `.env`, and the follow-u
 
 The resources stay in place because later labs reuse the same APIM instance.
 
+After the last cell, confirm the recorded objectives in a terminal:
+
+```powershell
+./scripts/show-results.ps1 -Notebook demo1-token-limits
+```
+
+```text
+notebook           objective             status
+--------           ---------             ------
+demo1-token-limits demo1.baseline        passed
+demo1-token-limits demo1.quota_exhausted passed
+demo1-token-limits demo1.rate_limit_429  passed
+demo1-token-limits demo1.reset_recovery  passed
+```
+
 ### Exercise 2.6: Review the session evidence
 
 > [!NOTE]

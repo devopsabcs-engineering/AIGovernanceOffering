@@ -41,27 +41,56 @@ Deux chemins suppriment des ressources. Dans `lab-session.yml`, `cleanup --auto`
 ### Exercice 7.1 (pratique) : Lancer un démantèlement à blanc
 
 ```powershell
+./scripts/run-lab-workflow.ps1 -Mode teardown-plan
+```
+
+Le script cible la génération active, ouvre la page de l'exécution pour l'approbation (**Review deployments** > **lab** > **Approve and deploy**), attend le résultat et affiche le plan tiré du journal de la tâche. La commande brute équivalente est :
+
+```powershell
 gh workflow run teardown.yml -f confirm_resource_group=<groupe-de-ressources> -f generation=<generation>
 ```
 
-Résultat attendu : après l'approbation de l'environnement, la tâche charge l'enregistrement de manifeste valide le plus récent pour la génération, vérifie son empreinte et liste les cibles exactes prévues en distinguant les ressources actives des ressources supprimées de manière réversible. Rien n'est supprimé.
+Résultat attendu : la tâche charge l'enregistrement de manifeste valide le plus récent pour la génération, vérifie son empreinte et liste les cibles exactes prévues en distinguant les ressources actives des ressources supprimées de manière réversible. Rien n'est supprimé.
+
+```text
+cleanup: target microsoft.cognitiveservices/accounts/deployments chat: would_delete
+cleanup: target microsoft.apimanagement/service apim-aigov-lab-g05-001-<suffixe>: would_delete
+...
+cleanup: status=dry_run action=dry_run active=7 failures=0 tombstones=0 exposure=continuing
+```
 
 Une incohérence de locataire, d'abonnement ou de groupe de ressources, une ressource inattendue, une propriété ambiguë ou un verrou arrête l'exécution. Les verrous ne sont jamais retirés automatiquement.
 
 ### Exercice 7.2 (pratique) : Exécuter le démantèlement
 
+Exécutez d'abord le nettoyage interactif de l'[exercice 7.5](#exercice-75--nettoyer-les-artefacts-des-carnets-interactifs) si vous voulez le voir fonctionner; le démantèlement supprime l'instance APIM dans tous les cas.
+
+```powershell
+./scripts/run-lab-workflow.ps1 -Mode teardown
+```
+
+La commande brute équivalente est :
+
 ```powershell
 gh workflow run teardown.yml -f confirm_resource_group=<groupe-de-ressources> -f generation=<generation> -f execute=true
 ```
 
-Résultat attendu : les déploiements de modèle sont supprimés en premier pour libérer le quota, puis les autres ressources détenues dans l'ordre des dépendances. Le groupe de ressources du laboratoire, vide, le groupe de ressources d'identité avec l'identité attribuée par l'utilisateur d'APIM et les enregistrements de manifeste sont conservés.
+Résultat attendu : les déploiements de modèle sont supprimés en premier pour libérer le quota, puis les autres ressources détenues dans l'ordre des dépendances. Le groupe de ressources du laboratoire, vide, le groupe de ressources d'identité avec l'identité attribuée par l'utilisateur d'APIM et les enregistrements de manifeste sont conservés. Ensuite, le script liste les générations, où celle qui a été démantelée affiche `torn down`, et `./scripts/sync-lab-env.ps1` indique `No active generation` jusqu'au prochain déploiement.
 
 Chaque cible est traitée indépendamment avec un nombre borné de nouvelles tentatives. Un `404` confirmé signifie que la ressource est absente; un `403`, un délai dépassé ou un échec de découverte est une erreur, et non une réussite.
 
 ### Exercice 7.3 : Lire le rapport résiduel
 
+La tâche de démantèlement écrit le rapport résiduel dans `outputs/residual/<session_id>/report.json` sur l'exécuteur et journalise une ligne par cible, une par ressource supprimée de manière réversible et un résumé. `run-lab-workflow.ps1` affiche ces lignes; pour les afficher de nouveau pour n'importe quelle exécution de démantèlement :
+
 ```powershell
-Get-Content outputs/residual/<session_id>/report.json
+gh run view <id-execution> --log | Select-String 'cleanup: '
+```
+
+```text
+cleanup: target microsoft.apimanagement/service apim-aigov-lab-g05-001-<suffixe>: deleted
+cleanup: tombstone apim apim-aigov-lab-g05-001-<suffixe> scheduled purge 2026-10-05T...
+cleanup: status=clean action=deleted active=0 failures=0 tombstones=4 exposure=none_known
 ```
 
 Résultat attendu : le rapport liste les ressources actives, les ressources supprimées de manière réversible, les actions en échec, l'état de libération du quota et l'exposition continue connue ou inconnue. Les ressources détenues attendues en suppression réversible sont listées séparément et ne font pas échouer l'exécution; toute ressource détenue encore active, toute ressource inattendue ou toute suppression en échec produit un code de sortie d'échec.

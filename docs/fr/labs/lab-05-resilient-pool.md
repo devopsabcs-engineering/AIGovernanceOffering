@@ -61,6 +61,8 @@ Résultat attendu : chaque appel client inchangé indique le membre qui le sert 
 
 Le ratio est approximatif. Un petit échantillon ne promet jamais une répartition exacte, mais une valeur `x-served-by` inconnue ou absente, un `404` ou un état inattendu fait échouer la phase.
 
+La passerelle bloque parfois un seul appel fictif, surtout juste après une modification de configuration. Le carnet affiche alors `A mock pool call timed out after 30s; retrying once.` et renvoie la même requête comme tentative budgétée distincte. Un tel message est un bruit attendu; un deuxième dépassement de délai sur la nouvelle tentative arrête la cellule, que vous pouvez alors réexécuter.
+
 ### Exercice 5.4 (pratique) : Provoquer une panne et un débordement
 
 Exécutez la section FAULT.
@@ -78,6 +80,22 @@ Résultat attendu : après l'expiration de la période du disjoncteur, East réa
 ### Exercice 5.6 : Confirmer l'application des informations d'identification simulées
 
 Résultat attendu : un appel direct à l'API simulée sans ses informations d'identification est rejeté. Ce sondage négatif consigne `demo4.mock_auth_enforced`. L'API simulée n'est jamais rendue anonyme pour corriger le routage.
+
+Après la dernière cellule, confirmez les objectifs consignés dans un terminal :
+
+```powershell
+./scripts/show-results.ps1 -Notebook demo4-resilient-pool
+```
+
+```text
+notebook             objective                status
+--------             ---------                ------
+demo4-resilient-pool demo4.alternate_routing  passed
+demo4-resilient-pool demo4.fault_observed     passed
+demo4-resilient-pool demo4.mock_auth_enforced passed
+demo4-resilient-pool demo4.recovery           passed
+demo4-resilient-pool demo4.routing_paths      passed
+```
 
 ### Exercice 5.7 : Examiner les preuves de la session
 

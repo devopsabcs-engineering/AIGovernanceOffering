@@ -47,21 +47,52 @@ Get-Content policies/platform-team-product.xml
 
 Résultat attendu : la stratégie de plateforme émet une seule métrique de jetons avec les dimensions `API ID`, `Subscription ID` et `ClientApp`, normalise `ClientApp` selon la liste autorisée `retail-web`, `finance-batch` et `hr-assistant`, en signalant toute autre valeur comme `unknown`, et supprime l'en-tête `Ocp-Apim-Subscription-Key`, le paramètre de requête `subscription-key` et tout en-tête `api-key` avant le transfert. La stratégie de produit d'équipe applique `llm-token-limit` avec une `counter-key` égale à l'identifiant d'abonnement.
 
-### Exercice 6.2 : Comprendre l'enveloppe de trafic
+### Exercice 6.2 (pratique) : Lancer la session de trafic borné
 
-Le trafic s'exécute dans une session `full-session` ou `run-existing` après la réussite de la préparation et des sondages de portée.
+Le trafic s'exécute dans une session `full-session` ou `run-existing` après la réussite de la préparation et des sondages de portée. Lancez une session `run-existing` sur la génération déployée à l'atelier 00 :
 
-Résultat attendu : vous pouvez énoncer les valeurs par défaut : un processus, 30 tentatives, 128 jetons de sortie au maximum, 10 000 jetons réservés, une échéance de cinq minutes, des appels en série sans diffusion en continu et aucune nouvelle tentative. Les clés sont récupérées en privé et jamais affichées, et chaque appel effectue sa réservation dans l'enveloppe de la session.
+```powershell
+./scripts/run-lab-workflow.ps1 -Mode run-existing
+```
+
+Approuvez l'exécution sur la page qui s'ouvre. La session réexécute les cinq carnets sans interaction, envoie le trafic des équipes, écrit le rapport de répartition des coûts et ne supprime jamais de ressources. Elle dure environ 15 minutes, puis le script affiche les preuves.
+
+Résultat attendu : chaque atelier de `lab00-environment` à `lab06-chargeback` est `passed`, et `lab07-teardown` est `not_run`. Vous pouvez énoncer les valeurs par défaut du trafic : un processus, 30 tentatives, 128 jetons de sortie au maximum, 10 000 jetons réservés, une échéance de cinq minutes, des appels en série sans diffusion en continu et aucune nouvelle tentative. Les clés sont récupérées en privé et jamais affichées, et chaque appel effectue sa réservation dans l'enveloppe de la session.
 
 Le générateur consigne un manifeste d'utilisation des réponses et une fenêtre UTC fixe semi-ouverte dans `outputs/showback/<session_id>/manifest.json`. Un verrou de flux de travail n'arrête pas le trafic humain; une fenêtre qui contient des appels non comptabilisés est donc rejetée comme contaminée.
 
 ### Exercice 6.3 : Lire le rapport de répartition des coûts
+
+Les preuves affichées par le script se terminent par la répartition des coûts. Pour l'afficher de nouveau pour la dernière session :
+
+```powershell
+./scripts/show-evidence.ps1
+```
+
+```text
+Estimated model-token showback (USD retail) | 2026-10-03T09:25:00Z to 2026-10-03T09:27:00Z (half-open UTC)
+coverage complete | reconciliation reconciled | snapshot retail-2026-09-29-gpt-4.1-mini-canadaeast
+
+team         prompt_tokens completion_tokens estimated_usd
+----         ------------- ----------------- -------------
+team-finance           190               155 0.00039204
+team-hr                180               221 0.000514976
+team-retail            190               237 0.000550792
+
+total estimated_usd 0.001457808 (complete)
+```
 
 Résultat attendu : le rapport interroge une seule représentation, la table `customMetrics` d'Application Insights sommée par `valueSum`, limitée au composant, à l'espace de noms de métriques observé, à l'API de plateforme, aux trois équipes et à la fenêtre. Il rapproche les sommes d'invite et de réponse du manifeste selon une tolérance explicite et les valorise avec exactement un tarif par modèle, version, SKU, région, devise, période d'effet et unité, tiré de `scripts/prices/<snapshot>.json`.
 
 Un rapport à couverture complète affiche des totaux. Un rapport à couverture partielle marque les valeurs connues comme partielles. Un rapport où l'utilisation, l'attribution ou les prix manquent supprime le total et consigne les nombres d'appels non attribués, sans prix, en échec et ambigus.
 
 ### Exercice 6.4 (pratique) : Lancer une session report-only
+
+```powershell
+./scripts/run-lab-workflow.ps1 -Mode report-only
+```
+
+Sans fenêtre, le script réutilise l'intervalle de la dernière session `run-existing` ou `full-session` réussie. Pour choisir votre propre fenêtre, passez `-WindowStart 2026-10-03T09:00:00Z -WindowEnd 2026-10-03T10:00:00Z`. La commande brute équivalente est :
 
 ```powershell
 gh workflow run lab-session.yml -f mode=report-only -f generation=<generation> -f confirm_resource_group=<groupe-de-ressources> -f report_window_start=<debut-utc> -f report_window_end=<fin-utc>

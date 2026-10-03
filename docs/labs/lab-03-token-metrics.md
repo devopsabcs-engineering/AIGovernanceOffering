@@ -80,6 +80,21 @@ Ingestion delay is normal, so the query polls with backoff for a bounded time. I
 > [!NOTE]
 > For streaming responses, request usage from the provider with `stream_options: {"include_usage": true}` where supported. An interrupted stream can produce incomplete counts because the final usage event may never arrive. The main flow uses non-streaming calls so the counts reconcile.
 
+After the last cell, confirm the recorded objectives in a terminal:
+
+```powershell
+./scripts/show-results.ps1 -Notebook demo2-token-metrics
+```
+
+```text
+notebook            objective                 status
+--------            ---------                 ------
+demo2-token-metrics demo2.dimensions_observed passed
+demo2-token-metrics demo2.logger_configured   passed
+demo2-token-metrics demo2.metrics_reconciled  passed
+demo2-token-metrics demo2.no_message_capture  passed
+```
+
 ### Exercise 3.6: Review the session evidence
 
 > [!NOTE]

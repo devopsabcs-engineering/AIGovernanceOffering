@@ -82,6 +82,21 @@ Résultat attendu : une nouvelle valeur `DEMO_RUN` est conservée dans `.env`, e
 
 Les ressources restent en place, car les ateliers suivants réutilisent la même instance APIM.
 
+Après la dernière cellule, confirmez les objectifs consignés dans un terminal :
+
+```powershell
+./scripts/show-results.ps1 -Notebook demo1-token-limits
+```
+
+```text
+notebook           objective             status
+--------           ---------             ------
+demo1-token-limits demo1.baseline        passed
+demo1-token-limits demo1.quota_exhausted passed
+demo1-token-limits demo1.rate_limit_429  passed
+demo1-token-limits demo1.reset_recovery  passed
+```
+
 ### Exercice 2.6 : Examiner les preuves de la session
 
 > [!NOTE]
