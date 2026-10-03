@@ -250,6 +250,7 @@ def make_ctx(tmp: Path, arm: FakeArm, env: Optional[Dict[str, str]] = None, **ov
         http_get=lambda *a, **k: FakeResponse(200, {}),
         logs_query=lambda *a, **k: [{"rows": 3}],
         validate_env=lambda _p: None,
+        validate_local_env=lambda _p: None,
         papermill=lambda *a: 0,
         env_path=Path(tmp) / ".env",
     )

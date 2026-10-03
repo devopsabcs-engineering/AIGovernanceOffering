@@ -124,6 +124,17 @@ MANIFEST_ID_OUTPUTS = (
 
 def _default_validate_env(env_path: Path) -> None:
     """Validate the written .env with load_config() in a fresh headless interpreter."""
+    _validate_env_headless(env_path, dict(os.environ))
+
+
+def _default_validate_local_env(env_path: Path) -> None:
+    """Validate an interactive .env headless, ignoring stale shell values the wrapper clears."""
+    file_keys = set(common.read_env_file(env_path))
+    env = {k: v for k, v in os.environ.items() if k not in file_keys and k not in SESSION_KEYS}
+    _validate_env_headless(env_path, env)
+
+
+def _validate_env_headless(env_path: Path, env: Dict[str, str]) -> None:
     if Path(env_path).resolve() != ENV_PATH.resolve():
         raise AutomationError("Headless validation only supports the repository-root .env.")
     code = (
@@ -131,7 +142,6 @@ def _default_validate_env(env_path: Path) -> None:
         "from shared.config import load_config, validate_config;"
         "validate_config(load_config())"
     )
-    env = dict(os.environ)
     env["AIGOV_HEADLESS"] = "1"
     proc = subprocess.run(
         [sys.executable, "-c", code, str(common.REPO_ROOT)],
@@ -178,6 +188,7 @@ class Context:
     logs_query: Callable[..., List[Dict[str, Any]]] = common.default_logs_query
     prompt: Optional[Callable[[str], str]] = None
     validate_env: Callable[[Path], None] = _default_validate_env
+    validate_local_env: Callable[[Path], None] = _default_validate_local_env
     papermill: Callable[[Path, Path, Path, Path, float], int] = _default_papermill
     env_path: Path = ENV_PATH
     _client: Optional[common.ArmClient] = None
@@ -1642,6 +1653,14 @@ def cmd_cleanup(ctx: Context, args: argparse.Namespace) -> int:
     report = run_cleanup(ctx, target, records, execute=args.execute, retries=args.retries,
                          poll_seconds=args.poll_seconds, timeout_seconds=args.timeout_seconds)
     report["mode"] = "teardown"
+    for entry in report["targets"]:
+        detail = f" ({entry['error_category']})" if entry["error_category"] else ""
+        ctx.say(f"cleanup: target {entry['type']} {entry['name']}: {entry['result']}{detail}")
+    for tomb in report["tombstones"]:
+        ctx.say(f"cleanup: tombstone {tomb.get('kind', '')} {tomb.get('name', '')} "
+                f"scheduled purge {tomb.get('scheduled_purge') or 'unknown'}")
+    for item in report["unexpected"]:
+        ctx.say(f"cleanup: unexpected {item['type']} {item['name']}")
     _write_residual(ctx, session_id, report)
     return 0 if report["status"] in ("clean", "dry_run") else 1
 
@@ -1737,6 +1756,168 @@ def cmd_purge(ctx: Context, args: argparse.Namespace) -> int:
     if not args.execute:
         ctx.say("purge: listing only; rerun with --execute --confirm-resource-group <rg> to purge.")
     ctx.say(f"purge: {purged} purged, {skipped} skipped, {len(tombstones)} inventoried tombstone(s)")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# generations / local-env (interactive lab users; read-only in Azure)
+# ---------------------------------------------------------------------------
+
+DEFAULT_LAB_RESOURCE_GROUP = "rg-aigov-lab"
+_GENERATION_NAME = re.compile(r"^aigov-(?:manifest|main)-([a-z0-9]{2,4})(?:-|$)")
+
+
+def _lab_scope(ctx: Context, args: argparse.Namespace) -> Tuple[str, str]:
+    resource_group = (args.resource_group or _env_first(ctx, "AIGOV_LAB_RESOURCE_GROUP")
+                      or DEFAULT_LAB_RESOURCE_GROUP)
+    # The signed-in az subscription wins over a possibly stale AZURE_SUBSCRIPTION_ID in the shell.
+    subscription_id = args.subscription_id or ctx.client.account().get("subscription_id", "")
+    if not subscription_id:
+        raise AutomationError("No subscription is selected; run az login or pass --subscription-id.")
+    return subscription_id, resource_group
+
+
+def _generation_state(
+    ctx: Context, sub: str, rg: str, main: Optional[Mapping[str, Any]]
+) -> Tuple[str, Dict[str, Any]]:
+    if main is None:
+        return "retired", {}
+    props = main.get("properties") or {}
+    provisioning = str(props.get("provisioningState") or "unknown")
+    if provisioning != "Succeeded":
+        return f"deploy {provisioning.lower()}", {}
+    outputs = props.get("outputs") or (ctx.client.get_deployment(sub, rg, main["name"]).get("properties") or {}).get(
+        "outputs") or {}
+    try:
+        apim_id = str(_output_value(outputs, "APIM_RESOURCE_ID"))
+    except AutomationError:
+        return "outputs missing", {}
+    try:
+        apim = ctx.client.get_resource(apim_id, common.API_VERSIONS["apim"])
+    except AzError as exc:
+        if exc.category == "not_found":
+            return "torn down", outputs
+        raise
+    state = str((apim.get("properties") or {}).get("provisioningState") or "unknown")
+    return ("active" if state == "Succeeded" else f"apim {state.lower()}"), outputs
+
+
+def survey_generations(ctx: Context, sub: str, rg: str) -> List[Dict[str, Any]]:
+    """One row per generation in the deployment history (oldest first) with its live state."""
+    try:
+        deployments = ctx.client.list_deployments(sub, rg)
+    except AzError as exc:
+        if exc.category == "not_found":
+            raise AutomationError(f"Resource group {rg} does not exist; run the bootstrap first.") from None
+        raise
+    rows: Dict[str, Dict[str, Any]] = {}
+    mains: Dict[str, Mapping[str, Any]] = {}
+    for deployment in deployments:
+        name = str(deployment.get("name", ""))
+        match = _GENERATION_NAME.match(name)
+        if not match:
+            continue
+        generation = match.group(1)
+        row = rows.setdefault(generation, {"generation": generation, "records": 0, "last_activity": ""})
+        stamp = str((deployment.get("properties") or {}).get("timestamp") or "")
+        row["last_activity"] = max(row["last_activity"], stamp[:19])
+        if name.startswith(MANIFEST_PREFIX):
+            row["records"] += 1
+        elif name == f"{MAIN_PREFIX}{generation}":
+            mains[generation] = deployment
+    for generation, row in rows.items():
+        row["state"], row["outputs"] = _generation_state(ctx, sub, rg, mains.get(generation))
+    return sorted(rows.values(), key=lambda r: (r["last_activity"], r["generation"]))
+
+
+def next_generation(generations: Sequence[str]) -> str:
+    """Next unused gNN; any generation with history may have tombstones holding its names."""
+    numbers = [int(m.group(1)) for m in (re.fullmatch(r"g(\d{1,3})", g) for g in generations) if m]
+    return f"g{(max(numbers) + 1) if numbers else 1:02d}"
+
+
+def cmd_generations(ctx: Context, args: argparse.Namespace) -> int:
+    sub, rg = _lab_scope(ctx, args)
+    rows = survey_generations(ctx, sub, rg)
+    active = [r["generation"] for r in rows if r["state"] == "active"]
+    upcoming = next_generation([r["generation"] for r in rows])
+    if args.next:
+        ctx.say(upcoming)
+        return 0
+    if args.active:
+        if not active:
+            raise AutomationError(f"No active generation in {rg}; deploy one first (Lab 00).")
+        ctx.say(active[-1])
+        return 0
+    ctx.say(f"Lab resource group: {rg}")
+    ctx.say(f"{'generation':<12}{'state':<16}{'records':>8}  last activity (UTC)")
+    for row in rows:
+        ctx.say(f"{row['generation']:<12}{row['state']:<16}{row['records']:>8}  {row['last_activity'] or '-'}")
+    ctx.say(f"active generation: {', '.join(active) or 'none'}")
+    ctx.say(f"next unused generation: {upcoming}")
+    return 0
+
+
+def cmd_local_env(ctx: Context, args: argparse.Namespace) -> int:
+    sub, rg = _lab_scope(ctx, args)
+    rows = {r["generation"]: r for r in survey_generations(ctx, sub, rg)}
+    active = [g for g, r in rows.items() if r["state"] == "active"]
+    generation = args.generation or (active[-1] if active else "")
+    if not generation:
+        raise AutomationError(f"No active generation in {rg}; deploy one first (Lab 00).")
+    row = rows.get(generation)
+    if not row or row["state"] != "active":
+        state = row["state"] if row else "unknown"
+        raise AutomationError(f"Generation {generation} is not active in {rg} (state: {state}).")
+    if len(active) > 1 and not args.generation:
+        ctx.say(f"local-env: active generations {', '.join(active)}; using the newest, {generation}.")
+    outputs = row["outputs"]
+    if _output_value(outputs, "AZURE_SUBSCRIPTION_ID") != sub:
+        raise AutomationError("Deployment subscription does not match the signed-in subscription.")
+    if str(_output_value(outputs, "AZURE_RESOURCE_GROUP")).lower() != rg.lower():
+        raise AutomationError("Deployment resource group does not match the lab resource group.")
+    component = ctx.client.get_resource(_output_value(outputs, "APP_INSIGHTS_RESOURCE_ID"), common.API_VERSIONS["insights"])
+    connection_string = (component.get("properties") or {}).get("ConnectionString") or ""
+    if not connection_string:
+        raise AutomationError("Application Insights connection string could not be read.")
+
+    existing = common.read_env_file(ctx.env_path)
+    same_generation = existing.get("AIGOV_GENERATION") == generation
+    values: Dict[str, str] = {}
+    for output_key, env_key in OUTPUT_ENV_MAP:
+        value = _output_value(outputs, output_key)
+        values[env_key] = ",".join(str(v) for v in value) if isinstance(value, list) else str(value)
+    values["APP_INSIGHTS_CONNECTION_STRING"] = connection_string
+    for key in EMPTY_ENV_KEYS:
+        values[key] = existing.get(key, "") if same_generation else ""
+    for key in THRESHOLD_KEYS:
+        values[key] = existing.get(key) or _env_first(ctx, f"AIGOV_{key}") or DEFAULT_CONTENT_SAFETY_THRESHOLD
+    values["DEMO_RUN"] = (existing.get("DEMO_RUN") if same_generation else "") or uuid.uuid4().hex[:8]
+    # Keep user additions such as DEMO3_FIXTURES_FILE; drop automation session keys.
+    for key, value in existing.items():
+        if key not in values and key not in SESSION_KEYS:
+            values[key] = value
+
+    body = f"# Private file written by lab_session.py local-env for generation {generation}. Never commit.\n"
+    body += "".join(f"{key}={value}\n" for key, value in values.items())
+    backed_up = False
+    if ctx.env_path.exists():
+        previous = ctx.env_path.read_text(encoding="utf-8")
+        if previous != body:
+            common.write_private_text(ctx.env_path.with_name(ctx.env_path.name + ".bak"), previous)
+            backed_up = True
+    common.write_private_text(ctx.env_path, body)
+    ctx.validate_local_env(ctx.env_path)
+
+    ctx.say(f"local-env: wrote {len(values)} keys to .env for generation {generation} (secrets not shown)")
+    ctx.say(f"local-env: APIM {values['APIM_NAME']} at {values['APIM_GATEWAY_URL']}")
+    if backed_up:
+        ctx.say("local-env: the previous .env is saved as .env.bak")
+    shadowed = sorted({k for k, v in values.items() if k in ctx.env and ctx.env[k] != v}
+                      | {k for k in SESSION_KEYS if k in ctx.env})
+    if shadowed and not args.wrapper_clears_shell:
+        ctx.say(f"local-env: this shell still sets {', '.join(shadowed)}; run scripts/sync-lab-env.ps1 "
+                "to clear them, or open a new terminal.")
     return 0
 
 
@@ -1862,6 +2043,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--confirm-resource-group", help="Required with --execute; must equal the lab resource group.")
     _add_target_args(p)
     p.set_defaults(func=cmd_purge)
+
+    p = sub.add_parser("generations", help="Read-only: list lab generations, the active one, and the next unused one.")
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--next", action="store_true", help="Print only the next unused generation.")
+    group.add_argument("--active", action="store_true", help="Print only the newest active generation.")
+    _add_target_args(p)
+    p.set_defaults(func=cmd_generations)
+
+    p = sub.add_parser("local-env", help="Write an interactive .env from the active generation's deployment outputs.")
+    p.add_argument("--wrapper-clears-shell", action="store_true", help=argparse.SUPPRESS)
+    _add_target_args(p)
+    p.set_defaults(func=cmd_local_env)
     return parser
 
 

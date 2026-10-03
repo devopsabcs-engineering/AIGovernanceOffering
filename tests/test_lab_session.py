@@ -500,6 +500,8 @@ class CleanupTests(_Base):
         self.create_and_deploy()
         self.assertEqual(run(self.ctx, "cleanup", "--dry-run"), 0)
         self.assertEqual(self.arm.deleted_ids, [])
+        apim_name = lab_session.planned_names(target())["apim"]
+        self.assertIn(f"cleanup: target microsoft.apimanagement/service {apim_name}: would_delete", self.output())
         self.assertEqual(run(self.ctx, "cleanup", "--execute"), 1)
         self.assertIn("--confirm-resource-group", self.output())
         self.assertEqual(run(self.ctx, "cleanup", "--execute", "--confirm-resource-group", "wrong"), 1)
@@ -622,11 +624,76 @@ class SecretRegistryTests(unittest.TestCase):
         self.assertEqual(out.getvalue(), "")
 
 
+class LocalEnvTests(_Base):
+    def setUp(self):
+        super().setUp()
+        self.create_and_deploy()
+        self.ctx.env = {}
+        self.ctx.out = io.StringIO()
+
+    def apim_id(self):
+        return next(e["id"] for e in inventory()["expected"] if e["type"] == "microsoft.apimanagement/service")
+
+    def test_generations_reports_active_and_next(self):
+        self.assertEqual(run(self.ctx, "generations"), 0, self.output())
+        self.assertRegex(self.output(), rf"{GEN}\s+active\s+2")
+        self.assertIn("next unused generation: g02", self.output())
+        self.ctx.out = io.StringIO()
+        self.assertEqual(run(self.ctx, "generations", "--active"), 0)
+        self.assertEqual(self.output().strip(), GEN)
+
+    def test_torn_down_generation_is_not_active(self):
+        self.arm.resources.pop(self.apim_id().lower())
+        self.assertEqual(run(self.ctx, "generations"), 0)
+        self.assertRegex(self.output(), rf"{GEN}\s+torn down")
+        self.ctx.out = io.StringIO()
+        self.assertEqual(run(self.ctx, "generations", "--next"), 0)
+        self.assertEqual(self.output().strip(), "g02")
+        self.assertEqual(run(self.ctx, "local-env"), 1)
+        self.assertIn("No active generation", self.output())
+        self.assertFalse(self.ctx.env_path.exists())
+
+    def test_writes_interactive_env_without_session_keys(self):
+        self.ctx.env_path.write_text(
+            "AIGOV_HEADLESS=1\nSESSION_ID=old-1\nAIGOV_GENERATION=g00\nAPIM_NAME=stale\nDEMO_RUN=oldrun00\n"
+            "DEMO3_FIXTURES_FILE=approved.json\n", encoding="utf-8")
+        self.assertEqual(run(self.ctx, "local-env"), 0, self.output())
+        values = common.read_env_file(self.ctx.env_path)
+        self.assertEqual(values["AIGOV_GENERATION"], GEN)
+        self.assertEqual(values["APIM_NAME"], lab_session.planned_names(target())["apim"])
+        self.assertTrue(values["APP_INSIGHTS_CONNECTION_STRING"].startswith("InstrumentationKey="))
+        self.assertEqual(values["DEMO3_FIXTURES_FILE"], "approved.json")
+        self.assertNotEqual(values["DEMO_RUN"], "oldrun00")
+        for key in lab_session.SESSION_KEYS:
+            self.assertNotIn(key, values)
+        self.assertNotIn("InstrumentationKey", self.output())
+        self.assertIn("SESSION_ID=old-1", (self.tmp / ".env.bak").read_text(encoding="utf-8"))
+
+    def test_same_generation_keeps_demo_run(self):
+        run(self.ctx, "local-env")
+        first = common.read_env_file(self.ctx.env_path)["DEMO_RUN"]
+        self.assertEqual(run(self.ctx, "local-env"), 0)
+        self.assertEqual(common.read_env_file(self.ctx.env_path)["DEMO_RUN"], first)
+
+    def test_warns_about_shadowing_shell_variables(self):
+        self.ctx.env.update({"AIGOV_GENERATION": "g00", "AIGOV_HEADLESS": "1"})
+        self.assertEqual(run(self.ctx, "local-env"), 0)
+        self.assertIn("still sets AIGOV_GENERATION, AIGOV_HEADLESS", self.output())
+
+    def test_inactive_generation_is_refused(self):
+        self.assertEqual(run(self.ctx, "local-env", "--generation", "g09"), 1)
+        self.assertIn("not active", self.output())
+
+    def test_next_generation_numbering(self):
+        self.assertEqual(lab_session.next_generation([]), "g01")
+        self.assertEqual(lab_session.next_generation(["g04", "g09", "x1"]), "g10")
+
+
 class HelpTests(unittest.TestCase):
     def test_every_subcommand_has_help(self):
         commands = [["init-session"], ["preflight"], ["what-if"], ["manifest", "create"], ["manifest", "verify"],
                     ["deploy"], ["write-env"], ["readiness"], ["probe-scopes"], ["run-notebooks"], ["cleanup"],
-                    ["purge"]]
+                    ["purge"], ["generations"], ["local-env"]]
         for command in commands:
             with self.subTest(command=command), self.assertRaises(SystemExit) as raised, \
                     patch("sys.stdout", new=io.StringIO()):
