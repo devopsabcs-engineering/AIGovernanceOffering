@@ -27,7 +27,10 @@ $pyArgs = @((Join-Path $PSScriptRoot 'lab_session.py'), 'local-env', '--wrapper-
 if ($Generation) { $pyArgs += @('--generation', $Generation) }
 if ($ResourceGroup) { $pyArgs += @('--resource-group', $ResourceGroup) }
 python @pyArgs
-if ($LASTEXITCODE -ne 0) { throw 'local-env failed; see the message above.' }
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning '.env was not changed; see the message above.'
+    exit 1
+}
 
 # Environment variables are process-wide, so clearing them here also clears them for this terminal.
 $envFile = Join-Path $repoRoot '.env'
