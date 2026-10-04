@@ -457,7 +457,7 @@ def objective_status(classification: str, not_tripped_status: str = "inconclusiv
 
 TOKEN_LIMIT_OUTCOMES = (
     "ok", "gateway_rate_limit", "gateway_quota", "backend_throttle",
-    "content_safety_block", "other",
+    "content_safety_block", "transport_error", "other",
 )
 
 
