@@ -28,7 +28,8 @@
         {"label": "demo3.gateway_warmup", "kind": "safety", "enabled": true, "max_attempts": 18, "estimated_input_tokens": 25, "max_output_tokens": 10, "stream": false, "client_retries": 0, "reserved_tokens": 630, "note": "Unscored warm-up until the new API, subscription, and policy are live."},
         {"label": "demo3.matrix_call", "kind": "safety", "enabled": true, "max_attempts": 3, "estimated_input_tokens": 67, "max_output_tokens": 200, "stream": false, "client_retries": 0, "reserved_tokens": 801},
         {"label": "demo3.transport_retry", "kind": "safety", "enabled": true, "max_attempts": 2, "estimated_input_tokens": 67, "max_output_tokens": 200, "stream": false, "client_retries": 0, "reserved_tokens": 534, "note": "One retry after a call that got no response, usually a stalled TLS handshake that sent nothing."},
-        {"label": "demo3.stream_call", "kind": "safety", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 68, "max_output_tokens": 300, "stream": true, "client_retries": 0, "reserved_tokens": 368}
+        {"label": "demo3.stream_call", "kind": "safety", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 68, "max_output_tokens": 300, "stream": true, "client_retries": 0, "reserved_tokens": 368},
+        {"label": "demo3.stream_retry", "kind": "safety", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 68, "max_output_tokens": 300, "stream": true, "client_retries": 0, "reserved_tokens": 368, "note": "One more observation after a transport or protocol error that carried no content-safety evidence."}
       ]
     },
     "demo4-resilient-pool": {
@@ -43,9 +44,9 @@
     }
   },
   "totals": {
-    "max_attempts": 328,
-    "model_and_safety_attempts": 175,
+    "max_attempts": 329,
+    "model_and_safety_attempts": 176,
     "mock_attempts": 153,
-    "max_reserved_tokens": 10092
+    "max_reserved_tokens": 10460
   }
 }
