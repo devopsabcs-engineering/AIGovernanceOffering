@@ -11,9 +11,17 @@ from __future__ import annotations
 
 import functools
 import subprocess
+import threading
+import time
 from typing import Optional
 
 ARM_SCOPE = "https://management.azure.com/.default"
+# az can take longer than azure-identity's 10-second default to start on Windows.
+CLI_PROCESS_TIMEOUT_SECONDS = 60
+_TOKEN_REFRESH_MARGIN_SECONDS = 300
+
+_token_lock = threading.Lock()
+_cached_arm_token = None
 
 
 @functools.lru_cache(maxsize=1)
@@ -26,19 +34,27 @@ def get_credential():
     from azure.identity import AzureCliCredential, DefaultAzureCredential
 
     try:
-        cred = AzureCliCredential()
+        cred = AzureCliCredential(process_timeout=CLI_PROCESS_TIMEOUT_SECONDS)
         # Force a token fetch to make sure `az login` has actually happened.
         cred.get_token(ARM_SCOPE)
         return cred
     except Exception:
-        return DefaultAzureCredential(exclude_interactive_browser_credential=True)
+        return DefaultAzureCredential(
+            exclude_interactive_browser_credential=True, process_timeout=CLI_PROCESS_TIMEOUT_SECONDS
+        )
 
 
 def get_arm_token() -> str:
-    """Return a bearer token for the Azure Resource Manager control plane."""
-    credential = get_credential()
-    token = credential.get_token(ARM_SCOPE)
-    return token.token
+    """Return a bearer token for the Azure Resource Manager control plane.
+
+    AzureCliCredential does not cache tokens, so each call would start a new
+    `az` process; reuse the token until shortly before it expires.
+    """
+    global _cached_arm_token
+    with _token_lock:
+        if _cached_arm_token is None or _cached_arm_token.expires_on - time.time() < _TOKEN_REFRESH_MARGIN_SECONDS:
+            _cached_arm_token = get_credential().get_token(ARM_SCOPE)
+        return _cached_arm_token.token
 
 
 def get_current_subscription_id() -> Optional[str]:
