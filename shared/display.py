@@ -112,11 +112,18 @@ def plot_token_series_by_dimension(
     ).sort_index()
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    pivot.plot(ax=ax, marker="o")
-    ax.set_xlabel("5-minute bin")
+    if len(pivot.index) == 1:
+        # A single 5-minute bin cannot form a time axis; show the split as bars instead.
+        pivot.iloc[0].plot.bar(ax=ax, color=[f"C{i}" for i in range(len(pivot.columns))])
+        ax.set_xlabel(f"{dimension_name} (5-minute bin starting {pivot.index[0]:%Y-%m-%d %H:%M} UTC)")
+        ax.tick_params(axis="x", rotation=0)
+    else:
+        pivot.plot(ax=ax, marker="o")
+        ax.set_xlabel("5-minute bin")
+        ax.legend(title=dimension_name)
     ax.set_ylabel("Tokens")
+    ax.set_ylim(bottom=0)
     ax.set_title(f"{metric_name} by {dimension_name}")
-    ax.legend(title=dimension_name)
     plt.tight_layout()
     plt.show()
     return fig
