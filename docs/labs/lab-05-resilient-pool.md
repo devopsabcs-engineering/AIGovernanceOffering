@@ -103,6 +103,8 @@ demo4-resilient-pool demo4.routing_paths      passed
 
 ![Objective results for Lab 05 from the reviewed session]({{ '/assets/images/lab05-resilient-pool-summary.png' | relative_url }})
 
+This image comes from an automated workflow session, not from your notebook run; your own results are the `show-results.ps1` table above. To see the same tables and images for your own sessions, run `./scripts/show-evidence.ps1 -OpenPng` after the `run-existing` session in Lab 06. A `deploy-only` session reports this lab as `not_run`.
+
 ## Validation Checklist
 
 * [ ] The client request was byte-identical in every phase

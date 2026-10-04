@@ -104,6 +104,8 @@ demo4-resilient-pool demo4.routing_paths      passed
 
 ![Résultats des objectifs de l'atelier 05 pour la session examinée]({{ '/assets/images/lab05-resilient-pool-summary.png' | relative_url }})
 
+Cette image provient d'une session automatisée du flux de travail, et non de votre exécution du carnet; vos propres résultats sont le tableau `show-results.ps1` ci-dessus. Pour voir les mêmes tableaux et images pour vos propres sessions, exécutez `./scripts/show-evidence.ps1 -OpenPng` après la session `run-existing` de l'atelier 06. Une session `deploy-only` indique cet atelier comme `not_run`.
+
 ## Liste de vérification
 
 * [ ] La requête du client était identique octet par octet dans chaque phase

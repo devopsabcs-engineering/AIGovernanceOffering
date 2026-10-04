@@ -104,6 +104,8 @@ demo3-content-safety demo3.stream_intervention inconclusive
 
 ![Objective results for Lab 04 from the reviewed session]({{ '/assets/images/lab04-content-safety-summary.png' | relative_url }})
 
+This image comes from an automated workflow session, not from your notebook run; your own results are the `show-results.ps1` table above. To see the same tables and images for your own sessions, run `./scripts/show-evidence.ps1 -OpenPng` after the `run-existing` session in Lab 06. A `deploy-only` session reports this lab as `not_run`.
+
 ## Validation Checklist
 
 * [ ] Both inbound and outbound `llm-content-safety` elements are present
