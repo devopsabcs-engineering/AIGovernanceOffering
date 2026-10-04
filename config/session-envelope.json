@@ -19,6 +19,7 @@
         {"label": "demo2.gateway_warmup", "kind": "model", "enabled": true, "max_attempts": 18, "estimated_input_tokens": 25, "max_output_tokens": 10, "stream": false, "client_retries": 0, "reserved_tokens": 630, "note": "Unscored warm-up until the new API, subscription, and policy are live; a successful warm-up's usage is reconciled with the emitted metrics."},
         {"label": "demo2.baseline_call", "kind": "model", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 27, "max_output_tokens": 40, "stream": false, "client_retries": 0, "reserved_tokens": 67},
         {"label": "demo2.traffic_call", "kind": "model", "enabled": true, "max_attempts": 8, "estimated_input_tokens": 35, "max_output_tokens": 50, "stream": false, "client_retries": 0, "reserved_tokens": 680},
+        {"label": "demo2.transport_retry", "kind": "model", "enabled": true, "max_attempts": 3, "estimated_input_tokens": 35, "max_output_tokens": 50, "stream": false, "client_retries": 0, "reserved_tokens": 255, "note": "One retry after a call that got no response, usually a stalled TLS handshake that sent nothing."},
         {"label": "demo2.optional_stream_call", "kind": "model", "enabled": false, "max_attempts": 0, "estimated_input_tokens": 25, "max_output_tokens": 40, "stream": true, "client_retries": 0, "reserved_tokens": 0, "note": "Commented out in the notebook; enabling it requires a revised envelope."}
       ]
     },
@@ -26,6 +27,7 @@
       "call_sites": [
         {"label": "demo3.gateway_warmup", "kind": "safety", "enabled": true, "max_attempts": 18, "estimated_input_tokens": 25, "max_output_tokens": 10, "stream": false, "client_retries": 0, "reserved_tokens": 630, "note": "Unscored warm-up until the new API, subscription, and policy are live."},
         {"label": "demo3.matrix_call", "kind": "safety", "enabled": true, "max_attempts": 3, "estimated_input_tokens": 67, "max_output_tokens": 200, "stream": false, "client_retries": 0, "reserved_tokens": 801},
+        {"label": "demo3.transport_retry", "kind": "safety", "enabled": true, "max_attempts": 2, "estimated_input_tokens": 67, "max_output_tokens": 200, "stream": false, "client_retries": 0, "reserved_tokens": 534, "note": "One retry after a call that got no response, usually a stalled TLS handshake that sent nothing."},
         {"label": "demo3.stream_call", "kind": "safety", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 68, "max_output_tokens": 300, "stream": true, "client_retries": 0, "reserved_tokens": 368}
       ]
     },
@@ -41,9 +43,9 @@
     }
   },
   "totals": {
-    "max_attempts": 323,
-    "model_and_safety_attempts": 170,
+    "max_attempts": 328,
+    "model_and_safety_attempts": 175,
     "mock_attempts": 153,
-    "max_reserved_tokens": 9303
+    "max_reserved_tokens": 10092
   }
 }
