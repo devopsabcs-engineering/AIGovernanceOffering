@@ -105,7 +105,7 @@ demo3-content-safety demo3.stream_intervention inconclusive
 
 ![Résultats des objectifs de l'atelier 04 pour la session examinée]({{ '/assets/images/lab04-content-safety-summary.png' | relative_url }})
 
-Cette image provient d'une session automatisée du flux de travail, et non de votre exécution du carnet; vos propres résultats sont le tableau `show-results.ps1` ci-dessus. Pour voir les mêmes tableaux et images pour vos propres sessions, exécutez `./scripts/show-evidence.ps1 -OpenPng` après la session `run-existing` de l'atelier 06. Une session `deploy-only` indique cet atelier comme `not_run`.
+Cette image provient d'une session automatisée du flux de travail, et non de votre exécution du carnet; vos propres résultats sont le tableau `show-results.ps1` ci-dessus. Pour produire le même tableau et la même image à partir de vos propres exécutions de carnets, exécutez `./scripts/show-results.ps1 -Evidence -OpenPng`; il utilise le même assainisseur et le même moteur de rendu que le flux de travail et écrit dans `outputs/evidence/local/`. Les preuves de session du flux de travail pour cet atelier n'apparaissent dans `./scripts/show-evidence.ps1` qu'après la session `run-existing` de l'atelier 06.
 
 ## Liste de vérification
 

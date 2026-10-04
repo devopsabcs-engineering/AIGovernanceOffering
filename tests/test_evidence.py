@@ -355,5 +355,44 @@ class SanitizerTests(unittest.TestCase):
             self.assertTrue(any(name.startswith(lab + "-") for name in names), lab)
 
 
+class LocalEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.results_root = self.tmp / "results"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def run_local(self):
+        out = io.StringIO()
+        code = render_evidence.main(["local", "--results-root", str(self.results_root),
+                                     "--out-dir", str(self.tmp / "evidence"),
+                                     "--env-file", str(self.tmp / "missing.env"), "--no-png"], out=out)
+        return code, out.getvalue()
+
+    def test_uses_newest_run_per_notebook_and_marks_workflow_labs(self):
+        stem = "00-setup-and-validation"
+        for run, status in (("oldrun01", "failed"), ("newrun02", "passed")):
+            for objective_id in results.REQUIRED_OBJECTIVES[stem]:
+                results.record_objective(stem, objective_id, status, {"count": 1},
+                                         session_id=run, root=self.results_root)
+        old = self.results_root / "oldrun01" / f"{stem}.json"
+        os.utime(old, (old.stat().st_atime, old.stat().st_mtime - 60))
+        code, output = self.run_local()
+        self.assertEqual(code, 0, output)
+        self.assertRegex(output, r"lab01-setup-validation\s+passed\s+outputs/results/newrun02")
+        self.assertRegex(output, r"lab02-token-limits\s+not_run")
+        self.assertRegex(output, r"lab06-chargeback\s+not_run\s+workflow only")
+        evidence = json.loads((self.tmp / "evidence" / "evidence.json").read_text(encoding="utf-8"))
+        self.assertEqual(evidence["session_id"], "local")
+
+    def test_no_results_is_reported(self):
+        code, output = self.run_local()
+        self.assertEqual(code, 1)
+        self.assertIn("no notebook results", output)
+        self.assertFalse((self.tmp / "evidence" / "evidence.json").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

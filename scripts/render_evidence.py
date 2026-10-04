@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, TextIO, Tuple
 
@@ -565,6 +566,76 @@ def cmd_render(args: argparse.Namespace, out: TextIO) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# local (interactive notebook runs; no workflow session)
+# ---------------------------------------------------------------------------
+
+LOCAL_SESSION_ID = "local"
+WORKFLOW_ONLY_SOURCES = ("readiness", "showback", "residual")
+
+
+def collect_local_results(results_root: Path, paths: common.Paths) -> Dict[str, str]:
+    """Copy the newest result file per notebook into one synthetic session; return stem -> source run."""
+    found: Dict[str, str] = {}
+    for stem in common.NOTEBOOK_STEMS:
+        candidates = [p for p in Path(results_root).glob(f"*/{stem}.json") if p.is_file() and not p.is_symlink()]
+        if not candidates:
+            continue
+        newest = max(candidates, key=lambda p: p.stat().st_mtime)
+        data = _load(newest)
+        if data is None or data.get("notebook") != stem:
+            raise SanitizeError("malformed_input")
+        # Interactive runs scatter results across DEMO_RUN folders; one synthetic session joins them.
+        data["session_id"] = LOCAL_SESSION_ID
+        atomic_write_json(paths.results_root / LOCAL_SESSION_ID / f"{stem}.json", data)
+        found[stem] = newest.parent.name
+    return found
+
+
+def cmd_local(args: argparse.Namespace, out: TextIO) -> int:
+    out_dir = Path(args.out_dir)
+    with tempfile.TemporaryDirectory(prefix="aigov-local-") as work:
+        paths = common.Paths(Path(work) / "outputs")
+        try:
+            sources = collect_local_results(Path(args.results_root), paths)
+            evidence = build_evidence(LOCAL_SESSION_ID, paths, LOCAL_SESSION_ID, "local")
+            scan_or_raise(json.dumps(evidence, sort_keys=True),
+                          known_secret_hashes(paths, LOCAL_SESSION_ID, Path(args.env_file)))
+        except SanitizeError as exc:
+            out.write(f"local: refused ({exc.code}); no evidence was written\n")
+            return 1
+    if not sources:
+        out.write("local: no notebook results under outputs/results yet; run a notebook first\n")
+        return 1
+    atomic_write_json(out_dir / "evidence.json", evidence)
+    out.write("Local evidence from your newest notebook runs (not a workflow session)\n\n")
+    out.write(f"{'lab':<24}{'status':<14}source\n{'---':<24}{'------':<14}------\n")
+    for lab, source in LABS:
+        status = evidence["labs"][lab]["status"]
+        origin = "workflow only" if source in WORKFLOW_ONLY_SOURCES else (
+            f"outputs/results/{sources[source]}" if source in sources else "-")
+        out.write(f"{lab:<24}{status:<14}{origin}\n")
+    for stem, entry in evidence["notebooks"].items():
+        if entry.get("status") != "recorded":
+            continue
+        out.write(f"\n{stem}\n")
+        for objective_id, objective in entry["objectives"].items():
+            out.write(f"  {objective_id:<30}{objective['status']}\n")
+    out.write(f"\nevidence.json: {out_dir / 'evidence.json'}\n")
+    if args.no_png:
+        return 0
+    png_dir = out_dir / "png"
+    if png_dir.exists() and not png_dir.is_symlink():
+        shutil.rmtree(png_dir)
+    try:
+        written = render(evidence, png_dir)
+    except ImportError:
+        out.write("local: matplotlib is not installed (pip install -r requirements.txt); no PNG was written\n")
+        return 1
+    out.write(f"PNG files: {png_dir} ({len(written)})\n")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="render_evidence.py", description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -577,6 +648,12 @@ def build_parser() -> argparse.ArgumentParser:
     r = sub.add_parser("render", help="Render lab00..lab07 PNGs from evidence.json only (no network, no notebooks).")
     r.add_argument("--evidence", required=True, help="Path to evidence.json.")
     r.add_argument("--out-dir", required=True, help="Output directory for PNG files.")
+    loc = sub.add_parser("local", help="Sanitize and render evidence from your newest local notebook runs.")
+    loc.add_argument("--results-root", default=str(common.REPO_ROOT / "outputs" / "results"))
+    loc.add_argument("--out-dir", default=str(common.REPO_ROOT / "outputs" / "evidence" / LOCAL_SESSION_ID))
+    loc.add_argument("--env-file", default=str(common.REPO_ROOT / ".env"),
+                     help="Private .env whose secret values are scanned for (never copied).")
+    loc.add_argument("--no-png", action="store_true", help="Write evidence.json only.")
     return parser
 
 
@@ -590,6 +667,8 @@ def main(argv: Optional[Sequence[str]] = None, out: Optional[TextIO] = None) -> 
         except common.AutomationError as exc:
             out.write(f"sanitize: {exc}\n")
             return 2
+    if args.command == "local":
+        return cmd_local(args, out)
     return cmd_render(args, out)
 
 
