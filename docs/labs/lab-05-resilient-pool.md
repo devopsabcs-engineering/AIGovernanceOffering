@@ -60,7 +60,7 @@ Expected result: each unchanged client call shows its serving member in `x-serve
 
 The ratio is approximate. A small sample never promises an exact distribution, but an unknown or missing `x-served-by` value, a `404`, or an unexpected status fails the phase.
 
-The gateway occasionally stalls a single mock call, especially right after a configuration change. The notebook then prints `A mock pool call timed out after 30s; retrying once.` and sends the same request again as a separately budgeted attempt. One such message is expected noise; a second timeout on the retry stops the cell, and you can rerun it.
+The gateway occasionally stalls or resets a single mock call, especially right after a configuration change. The notebook then prints `A mock pool call did not complete (ReadTimeout); retrying once.` (or `ConnectionError`) and sends the same request again as a separately budgeted attempt. One such message is expected noise; a second timeout on the retry stops the cell, and you can rerun it.
 
 ### Exercise 5.4 (Hands-on): Fault a member and spill over
 

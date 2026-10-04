@@ -61,7 +61,7 @@ Résultat attendu : chaque appel client inchangé indique le membre qui le sert 
 
 Le ratio est approximatif. Un petit échantillon ne promet jamais une répartition exacte, mais une valeur `x-served-by` inconnue ou absente, un `404` ou un état inattendu fait échouer la phase.
 
-La passerelle bloque parfois un seul appel fictif, surtout juste après une modification de configuration. Le carnet affiche alors `A mock pool call timed out after 30s; retrying once.` et renvoie la même requête comme tentative budgétée distincte. Un tel message est un bruit attendu; un deuxième dépassement de délai sur la nouvelle tentative arrête la cellule, que vous pouvez alors réexécuter.
+La passerelle bloque ou réinitialise parfois un seul appel fictif, surtout juste après une modification de configuration. Le carnet affiche alors `A mock pool call did not complete (ReadTimeout); retrying once.` (ou `ConnectionError`) et renvoie la même requête comme tentative budgétée distincte. Un tel message est un bruit attendu; un deuxième dépassement de délai sur la nouvelle tentative arrête la cellule, que vous pouvez alors réexécuter.
 
 ### Exercice 5.4 (pratique) : Provoquer une panne et un débordement
 
