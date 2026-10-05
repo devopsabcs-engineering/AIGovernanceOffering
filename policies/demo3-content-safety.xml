@@ -92,14 +92,16 @@
     <base />
     <!--
       Surface a clear, evidence-friendly 403 when llm-content-safety blocks a
-      (non-streaming) request or response: context.LastError.Source is
-      "llm-content-safety" for both the prompt-shield and category-threshold
-      cases, so the notebook's test matrix can tell blocks apart from other
-      failures via the x-content-safety-decision / x-content-safety-reason
-      response headers and the JSON body below.
+      (non-streaming) request or response, so the notebook's test matrix can
+      tell blocks apart from other failures via the x-content-safety-decision /
+      x-content-safety-reason response headers and the JSON body below.
+      context.LastError.Reason is "ContentSafetyPolicyViolated" for both the
+      prompt-shield and category-threshold cases. Match on it as well as on
+      Source: the gateway sometimes reports the same violation with Source
+      "request-forwarder" instead of "llm-content-safety".
     -->
     <choose>
-      <when condition='@(context.LastError != null &amp;&amp; context.LastError.Source == "llm-content-safety")'>
+      <when condition='@(context.LastError != null &amp;&amp; (context.LastError.Source == "llm-content-safety" || context.LastError.Reason == "ContentSafetyPolicyViolated"))'>
         <return-response>
           <set-status code="403" reason="Forbidden" />
           <set-header name="Content-Type" exists-action="override">

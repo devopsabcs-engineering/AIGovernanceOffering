@@ -414,7 +414,8 @@ The notebook drives the test matrix and renders it with
 > decision, not an engineering default.
 
 On a `403`, the policy's `<on-error>` handling (keyed on
-`context.LastError.Source == "llm-content-safety"`) returns a clear JSON body
+`context.LastError.Source == "llm-content-safety"` or
+`context.LastError.Reason == "ContentSafetyPolicyViolated"`) returns a clear JSON body
 plus `x-content-safety-decision` / `x-content-safety-reason` response
 headers as evidence. For the **streaming** case, Microsoft's documented
 behavior is that a detected violation makes APIM **stop forwarding further
