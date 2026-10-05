@@ -76,7 +76,9 @@ Exécutez les sections de vérification et d'acceptation.
 
 Résultat attendu : deux séries `ClientApp` apparaissent dans la table `customMetrics` d'Application Insights, et les sommes d'invite et de réponse correspondent à l'utilisation rapportée dans la tolérance indiquée. Cette étape consigne `demo2.dimensions_observed` et `demo2.metrics_reconciled`.
 
-Le délai d'ingestion est normal; la requête interroge donc avec un intervalle croissant pendant une durée bornée. Si l'échéance est dépassée, l'objectif n'est pas atteint; un graphique vide ne prouve pas une consommation nulle.
+Le délai d'ingestion est normal (habituellement de 30 à 120 secondes); la requête interroge donc avec un intervalle croissant pendant environ 5 minutes. Un graphique vide ne prouve pas une consommation nulle.
+
+La passerelle envoie les métriques par lots préagrégés et, en de rares occasions, un lot n'arrive jamais. Attendre plus longtemps ne permet pas de le récupérer. Si les totaux restent insuffisants après l'interrogation, le notebook affiche `Session window still short after polling` et mesure de nouveau une seule fois : il envoie un appel par `ClientApp` dans une nouvelle fenêtre et rapproche cette fenêtre seule. La preuve consigne les deux fenêtres (`reconciled_window: recheck` et les valeurs `session_*`). Si la nouvelle mesure ne se rapproche pas non plus, l'objectif échoue. Des métriques supérieures à l'utilisation échouent immédiatement, sans nouvelle mesure.
 
 > [!NOTE]
 > Pour les réponses en continu, demandez l'utilisation au fournisseur avec `stream_options: {"include_usage": true}` lorsque c'est pris en charge. Un flux interrompu peut produire des comptes incomplets, car l'événement final d'utilisation peut ne jamais arriver. Le flux principal utilise des appels sans diffusion en continu pour que les comptes se rapprochent.

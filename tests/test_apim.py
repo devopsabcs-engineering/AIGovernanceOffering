@@ -727,7 +727,7 @@ class TokenMetricsTests(unittest.TestCase):
     )
 
     def _fake_logs_client(self, tables, calls):
-        def fake_client(credential):
+        def fake_client(credential, **client_kwargs):
             def query_resource(resource_id, query, timespan=None, **kwargs):
                 calls.append({"resource_id": resource_id, "query": query})
                 return SimpleNamespace(tables=tables)

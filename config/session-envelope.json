@@ -19,6 +19,7 @@
         {"label": "demo2.gateway_warmup", "kind": "model", "enabled": true, "max_attempts": 18, "estimated_input_tokens": 25, "max_output_tokens": 10, "stream": false, "client_retries": 0, "reserved_tokens": 630, "note": "Unscored warm-up until the new API, subscription, and policy are live; a successful warm-up's usage is reconciled with the emitted metrics."},
         {"label": "demo2.baseline_call", "kind": "model", "enabled": true, "max_attempts": 1, "estimated_input_tokens": 27, "max_output_tokens": 40, "stream": false, "client_retries": 0, "reserved_tokens": 67},
         {"label": "demo2.traffic_call", "kind": "model", "enabled": true, "max_attempts": 8, "estimated_input_tokens": 35, "max_output_tokens": 50, "stream": false, "client_retries": 0, "reserved_tokens": 680},
+        {"label": "demo2.recheck_call", "kind": "model", "enabled": true, "max_attempts": 2, "estimated_input_tokens": 35, "max_output_tokens": 50, "stream": false, "client_retries": 0, "reserved_tokens": 170, "note": "One call per ClientApp in a fresh window, only when a metric batch from the session window never arrived."},
         {"label": "demo2.transport_retry", "kind": "model", "enabled": true, "max_attempts": 3, "estimated_input_tokens": 35, "max_output_tokens": 50, "stream": false, "client_retries": 0, "reserved_tokens": 255, "note": "One retry after a call that got no response, usually a stalled TLS handshake that sent nothing."},
         {"label": "demo2.optional_stream_call", "kind": "model", "enabled": false, "max_attempts": 0, "estimated_input_tokens": 25, "max_output_tokens": 40, "stream": true, "client_retries": 0, "reserved_tokens": 0, "note": "Commented out in the notebook; enabling it requires a revised envelope."}
       ]
@@ -44,9 +45,9 @@
     }
   },
   "totals": {
-    "max_attempts": 329,
-    "model_and_safety_attempts": 176,
+    "max_attempts": 331,
+    "model_and_safety_attempts": 178,
     "mock_attempts": 153,
-    "max_reserved_tokens": 10460
+    "max_reserved_tokens": 10630
   }
 }

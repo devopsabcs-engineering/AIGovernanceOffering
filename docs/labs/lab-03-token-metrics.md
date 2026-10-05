@@ -75,7 +75,9 @@ Run the verify and acceptance sections.
 
 Expected result: two `ClientApp` series appear in the Application Insights `customMetrics` table, and prompt plus completion sums match the reported response usage within the stated tolerance. This records `demo2.dimensions_observed` and `demo2.metrics_reconciled`.
 
-Ingestion delay is normal, so the query polls with backoff for a bounded time. If the deadline passes, the objective is not passed; an empty chart is not evidence of zero tokens.
+Ingestion delay is normal (typically 30 to 120 seconds), so the query polls with backoff for about 5 minutes. An empty chart is not evidence of zero tokens.
+
+The gateway sends metrics in pre-aggregated batches, and on rare occasions a batch never arrives. Waiting longer can't recover it. If the totals are still short after polling, the notebook prints `Session window still short after polling` and re-measures once: it sends one call per `ClientApp` in a fresh window and reconciles that window on its own. The evidence records both windows (`reconciled_window: recheck` plus the `session_*` figures). If the recheck doesn't reconcile either, the objective fails. Metrics that are higher than usage fail at once, with no recheck.
 
 > [!NOTE]
 > For streaming responses, request usage from the provider with `stream_options: {"include_usage": true}` where supported. An interrupted stream can produce incomplete counts because the final usage event may never arrive. The main flow uses non-streaming calls so the counts reconcile.

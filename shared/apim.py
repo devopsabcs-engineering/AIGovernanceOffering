@@ -992,10 +992,13 @@ customMetrics
 | summarize total=sum(value) by bin(timestamp, 5m), metric_name=name, dimension_value
 | order by timestamp asc
 """
-    response = LogsQueryClient(get_credential()).query_resource(
+    # Fail fast on a hung read (the transport default is 300 s); callers poll again.
+    # read_timeout must be set on the client: a per-call value never reaches the transport.
+    response = LogsQueryClient(get_credential(), read_timeout=90).query_resource(
         app_insights_resource_id,
         query,
         timespan=(start_time, end_time),
+        server_timeout=60,
     )
     if not response.tables:
         return []
